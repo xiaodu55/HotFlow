@@ -2,6 +2,8 @@ import { useMemo } from 'react'
 import type { ReactNode } from 'react'
 import { Tooltip } from 'antd'
 import type { Delta } from '@shared/types'
+import type { MetricInfo } from '../metricsInfo'
+import { MetricTip } from './MetricTip'
 import { useCountUp } from '../hooks/useCountUp'
 
 /** KPI 卡片霓虹光斑配色（循环取用） */
@@ -38,18 +40,18 @@ interface Props {
   format: (n: number) => string
   delta?: Delta
   suffix?: string
-  /** 指标口径说明（悬停显示，含公式与解读） */
-  tooltip?: string
+  /** 指标口径说明（悬停显示名称/公式/解读） */
+  tipInfo?: MetricInfo
   /** 光斑配色索引，缺省按顺序循环 */
   glowIndex?: number
 }
 
-export default function KpiCard({ label, value, format, delta, suffix, tooltip, glowIndex }: Props) {
+export default function KpiCard({ label, value, format, delta, suffix, tipInfo, glowIndex }: Props) {
   const animated = useCountUp(value)
   const glow = useMemo(() => GLOWS[(glowIndex ?? 0) % GLOWS.length], [glowIndex])
 
-  const labelNode: ReactNode = tooltip ? (
-    <Tooltip title={<span style={{ whiteSpace: 'pre-line' }}>{tooltip}</span>}>
+  const labelNode: ReactNode = tipInfo ? (
+    <Tooltip title={<MetricTip info={tipInfo} />}>
       <span className="kpi-label-help">
         {label} <span className="kpi-q">?</span>
       </span>

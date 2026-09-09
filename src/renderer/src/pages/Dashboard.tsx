@@ -1,23 +1,24 @@
 import { useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import { Button, Card, Col, Empty, List, Row, Segmented, Select, Space, Tag, Tooltip } from 'antd'
+import { Alert, Button, Card, Col, Empty, List, Row, Segmented, Select, Space, Tag, Tooltip } from 'antd'
 import { DownloadOutlined, QuestionCircleOutlined } from '@ant-design/icons'
 import type { AnalysisResult, SnapshotMeta, VideoDiff, VideoRecord } from '@shared/types'
 import type { EChartsOption } from 'echarts'
 import * as echarts from 'echarts'
 import { engagementRateOf } from '@shared/metrics'
-import { metricTooltip } from '../metricsInfo'
+import { METRIC_INFO } from '../metricsInfo'
+import { MetricTipByKey } from '../components/MetricTip'
 import Chart from '../components/Chart'
 import KpiCard from '../components/KpiCard'
 import PageHeader from '../components/PageHeader'
 import { fmtNum, fmtPct, fmtTime } from '../utils'
 
 /** 卡片标题 + 口径说明图标 */
-function MetricTitle({ tip, text }: { tip: string; text: string }): ReactNode {
+function MetricTitle({ tipKey, text }: { tipKey: keyof typeof METRIC_INFO; text: string }): ReactNode {
   return (
     <span>
       {text}{' '}
-      <Tooltip title={<span style={{ whiteSpace: 'pre-line' }}>{tip}</span>}>
+      <Tooltip title={<MetricTipByKey k={tipKey} />}>
         <QuestionCircleOutlined style={{ color: 'rgba(148,163,184,0.8)', fontSize: 12 }} />
       </Tooltip>
     </span>
@@ -81,7 +82,7 @@ function DiffList({
       styles={{ body: { paddingTop: 0 } }}
       extra={
         <Space size={4}>
-          <Tooltip title={<span style={{ whiteSpace: 'pre-line' }}>{metricTooltip('videoDiffs')}</span>}>
+          <Tooltip title={<MetricTipByKey k="videoDiffs" />}>
             <QuestionCircleOutlined style={{ color: 'rgba(148,163,184,0.8)', fontSize: 12 }} />
           </Tooltip>
           {onExport && items.length > 0 ? (
@@ -129,6 +130,7 @@ function DiffList({
 
 export default function DashboardPage({ analysis, snapshots, compareId, onCompareChange }: Props) {
   const [rankDim, setRankDim] = useState<'plays' | 'engagement'>('plays')
+  const [guideVisible, setGuideVisible] = useState(() => localStorage.getItem('hotflow-guide-seen') !== '1')
 
   const compareOptions = useMemo(() => {
     if (!analysis) return []
@@ -287,21 +289,21 @@ export default function DashboardPage({ analysis, snapshots, compareId, onCompar
     ]
   }
 
-  const kpis: Array<{ label: string; value: number; key: string; fmt: (n: number) => string; suffix?: string; tip: string }> = [
-    { label: '视频总数', value: totals.videoCount, key: 'videoCount', fmt: fmtNum, suffix: '条', tip: metricTooltip('videoCount') },
-    { label: '总播放', value: totals.plays, key: 'plays', fmt: fmtNum, tip: metricTooltip('plays') },
-    { label: '篇均播放', value: totals.avgPlays, key: 'avgPlays', fmt: fmtNum, tip: metricTooltip('avgPlays') },
-    { label: '互动率', value: totals.engagementRate, key: 'engagementRate', fmt: fmtPct, tip: metricTooltip('engagementRate') },
+  const kpis: Array<{ label: string; value: number; key: string; fmt: (n: number) => string; suffix?: string; tipKey: keyof typeof METRIC_INFO }> = [
+    { label: '视频总数', value: totals.videoCount, key: 'videoCount', fmt: fmtNum, suffix: '条', tipKey: 'videoCount' },
+    { label: '总播放', value: totals.plays, key: 'plays', fmt: fmtNum, tipKey: 'plays' },
+    { label: '篇均播放', value: totals.avgPlays, key: 'avgPlays', fmt: fmtNum, tipKey: 'avgPlays' },
+    { label: '互动率', value: totals.engagementRate, key: 'engagementRate', fmt: fmtPct, tipKey: 'engagementRate' },
     ...(totals.completionRate != null
-      ? [{ label: '平均完播率', value: totals.completionRate, key: 'completionRate', fmt: fmtPct, tip: metricTooltip('completionRate') }]
+      ? [{ label: '平均完播率', value: totals.completionRate, key: 'completionRate', fmt: fmtPct, tipKey: 'completionRate' as const }]
       : []),
     ...(totals.followsGained != null
-      ? [{ label: '涨粉', value: totals.followsGained, key: 'followsGained', fmt: fmtNum, tip: metricTooltip('followsGained') }]
+      ? [{ label: '涨粉', value: totals.followsGained, key: 'followsGained', fmt: fmtNum, tipKey: 'followsGained' as const }]
       : []),
-    { label: '总点赞', value: totals.likes, key: 'likes', fmt: fmtNum, tip: metricTooltip('likes') },
-    { label: '总评论', value: totals.comments, key: 'comments', fmt: fmtNum, tip: metricTooltip('comments') },
-    { label: '总分享', value: totals.shares, key: 'shares', fmt: fmtNum, tip: metricTooltip('shares') },
-    { label: '总收藏', value: totals.collects, key: 'collects', fmt: fmtNum, tip: metricTooltip('collects') }
+    { label: '总点赞', value: totals.likes, key: 'likes', fmt: fmtNum, tipKey: 'likes' },
+    { label: '总评论', value: totals.comments, key: 'comments', fmt: fmtNum, tipKey: 'comments' },
+    { label: '总分享', value: totals.shares, key: 'shares', fmt: fmtNum, tipKey: 'shares' },
+    { label: '总收藏', value: totals.collects, key: 'collects', fmt: fmtNum, tipKey: 'collects' }
   ]
 
   return (
@@ -325,6 +327,21 @@ export default function DashboardPage({ analysis, snapshots, compareId, onCompar
         }
       />
 
+      {guideVisible && (
+        <Alert
+          style={{ marginBottom: 16 }}
+          type="info"
+          showIcon
+          closable
+          afterClose={() => {
+            localStorage.setItem('hotflow-guide-seen', '1')
+            setGuideVisible(false)
+          }}
+          message="小贴士：看不懂的数字，鼠标放上去就有解释"
+          description="指标卡和图表标题旁的 ? 图标，悬停即可查看计算公式与解读；页头「对比期」可以任选两次导入做对比；净增卡是最接近「本期真实表现」的口径。"
+        />
+      )}
+
       <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
         {increments && (
           <>
@@ -334,15 +351,15 @@ export default function DashboardPage({ analysis, snapshots, compareId, onCompar
                 value={increments.plays}
                 format={(n) => (n >= 0 ? '' : '-') + fmtNum(Math.abs(n))}
                 glowIndex={0}
-                tooltip={metricTooltip('incPlays')}
+                tipInfo={METRIC_INFO.incPlays}
               />
             </Col>
             <Col xs={12} sm={8} md={6} lg={4} xl={4}>
-              <KpiCard label="本期净增点赞" value={increments.likes} format={fmtNum} glowIndex={1} tooltip={metricTooltip('incLikes')} />
+              <KpiCard label="本期净增点赞" value={increments.likes} format={fmtNum} glowIndex={1} tipInfo={METRIC_INFO.incLikes} />
             </Col>
             {increments.followsGained != null && (
               <Col xs={12} sm={8} md={6} lg={4} xl={4}>
-                <KpiCard label="本期净增涨粉" value={increments.followsGained} format={fmtNum} glowIndex={3} tooltip={metricTooltip('incFollows')} />
+                <KpiCard label="本期净增涨粉" value={increments.followsGained} format={fmtNum} glowIndex={3} tipInfo={METRIC_INFO.incFollows} />
               </Col>
             )}
           </>
@@ -354,7 +371,7 @@ export default function DashboardPage({ analysis, snapshots, compareId, onCompar
               value={k.value}
               format={k.fmt}
               suffix={k.suffix}
-              tooltip={k.tip}
+              tipInfo={METRIC_INFO[k.tipKey]}
               delta={analysis.deltas?.[k.key]}
               glowIndex={i}
             />
@@ -375,7 +392,7 @@ export default function DashboardPage({ analysis, snapshots, compareId, onCompar
           size="small"
           title={
             <MetricTitle
-              tip={metricTooltip('trendChart')}
+              tipKey="trendChart"
               text={`发布趋势 ${analysis.trendGranularity === 'day' ? '（按日）' : analysis.trendGranularity === 'week' ? '（按周）' : '（按月）'}`}
             />
           }
@@ -386,7 +403,7 @@ export default function DashboardPage({ analysis, snapshots, compareId, onCompar
       )}
 
       {analysis.incrementTrend.length > 0 && (
-        <Card size="small" title={<MetricTitle tip={metricTooltip('incrementTrend')} text="净增趋势" />}>
+        <Card size="small" title={<MetricTitle tipKey="incrementTrend" text="净增趋势" />}>
           <Chart option={incrementOption} />
         </Card>
       )}
@@ -394,14 +411,14 @@ export default function DashboardPage({ analysis, snapshots, compareId, onCompar
       <Row gutter={16}>
         {analysis.hourStats.length > 0 && (
           <Col xs={24} lg={12} style={{ marginBottom: 16 }}>
-            <Card size="small" title={<MetricTitle tip={metricTooltip('hourChart')} text="发布时段 × 平均表现" />}>
+            <Card size="small" title={<MetricTitle tipKey="hourChart" text="发布时段 × 平均表现" />}>
               <Chart option={hourOption} />
             </Card>
           </Col>
         )}
         {analysis.durationBuckets.length > 0 && (
           <Col xs={24} lg={12} style={{ marginBottom: 16 }}>
-            <Card size="small" title={<MetricTitle tip={metricTooltip('durationChart')} text="视频时长 × 平均表现" />}>
+            <Card size="small" title={<MetricTitle tipKey="durationChart" text="视频时长 × 平均表现" />}>
               <Chart option={durationOption} />
             </Card>
           </Col>
