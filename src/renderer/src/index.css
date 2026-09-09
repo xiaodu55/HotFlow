@@ -341,30 +341,35 @@ body.tech-light .qa-question {
 }
 
 /* ============ 指标悬停 Tooltip（科技感玻璃拟态） ============ */
+/* !important 用于压过 antd v6 的 cssinjs 内置样式 */
 .ant-tooltip .ant-tooltip-inner {
-  border-radius: 10px;
-  padding: 10px 12px;
-  font-size: 12px;
-  line-height: 1.6;
+  border-radius: 10px !important;
+  padding: 10px 12px !important;
+  font-size: 12px !important;
+  line-height: 1.6 !important;
+  border: 1px solid rgba(34, 211, 238, 0.45) !important;
+  background: rgba(10, 16, 30, 0.97) !important;
+  color: #e6eef8 !important;
+  box-shadow: 0 6px 24px rgba(34, 211, 238, 0.18), 0 2px 8px rgba(0, 0, 0, 0.4) !important;
 }
 
-body.tech-dark .ant-tooltip .ant-tooltip-inner {
-  background: rgba(10, 16, 30, 0.96);
-  border: 1px solid rgba(34, 211, 238, 0.4);
-  box-shadow: 0 6px 24px rgba(34, 211, 238, 0.18), 0 2px 8px rgba(0, 0, 0, 0.4);
-  color: #e6eef8;
-}
-
-body.tech-dark .ant-tooltip .ant-tooltip-arrow::before {
-  background: rgba(10, 16, 30, 0.96);
-  border: 1px solid rgba(34, 211, 238, 0.4);
+.ant-tooltip .ant-tooltip-arrow::before,
+.ant-tooltip .ant-tooltip-arrow::after {
+  background: rgba(10, 16, 30, 0.97) !important;
+  border: 1px solid rgba(34, 211, 238, 0.45) !important;
 }
 
 body.tech-light .ant-tooltip .ant-tooltip-inner {
-  background: rgba(255, 255, 255, 0.98);
-  border: 1px solid rgba(14, 165, 233, 0.45);
-  box-shadow: 0 6px 20px rgba(14, 165, 233, 0.15);
-  color: #1e293b;
+  background: rgba(255, 255, 255, 0.99) !important;
+  border: 1px solid rgba(14, 165, 233, 0.5) !important;
+  color: #1e293b !important;
+  box-shadow: 0 6px 20px rgba(14, 165, 233, 0.18) !important;
+}
+
+body.tech-light .ant-tooltip .ant-tooltip-arrow::before,
+body.tech-light .ant-tooltip .ant-tooltip-arrow::after {
+  background: rgba(255, 255, 255, 0.99) !important;
+  border: 1px solid rgba(14, 165, 233, 0.5) !important;
 }
 
 .tip-formula {

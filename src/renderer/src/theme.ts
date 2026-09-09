@@ -30,6 +30,8 @@ const darkTheme: ThemeConfig = {
     colorBgLayout: 'transparent',
     colorBgContainer: 'rgba(148, 163, 184, 0.055)',
     colorBgElevated: 'rgba(17, 25, 46, 0.96)',
+    // Tooltip 弹层背景（antd v6 默认是亮蓝色，这里改成主题深色）
+    colorBgSpotlight: 'rgba(10, 16, 30, 0.97)',
     colorBorder: 'rgba(148, 163, 184, 0.20)',
     colorBorderSecondary: 'rgba(148, 163, 184, 0.12)',
     colorText: '#e6eef8',
@@ -69,6 +71,7 @@ const lightTheme: ThemeConfig = {
     colorBgLayout: 'transparent',
     colorBgContainer: 'rgba(255, 255, 255, 0.82)',
     colorBgElevated: 'rgba(255, 255, 255, 0.98)',
+    colorBgSpotlight: 'rgba(255, 255, 255, 0.99)',
     colorBorder: 'rgba(100, 116, 139, 0.24)',
     colorBorderSecondary: 'rgba(100, 116, 139, 0.14)',
     borderRadius: 10,
