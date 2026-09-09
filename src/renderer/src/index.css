@@ -180,6 +180,24 @@ body.tech-light .kpi-card {
   color: rgba(148, 163, 184, 0.95);
 }
 
+.kpi-label-help {
+  cursor: help;
+}
+
+.kpi-q {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 13px;
+  height: 13px;
+  margin-left: 2px;
+  border-radius: 50%;
+  border: 1px solid rgba(148, 163, 184, 0.5);
+  font-size: 9px;
+  color: rgba(148, 163, 184, 0.9);
+  vertical-align: 1px;
+}
+
 .kpi-value {
   position: relative;
   margin: 6px 0 4px;

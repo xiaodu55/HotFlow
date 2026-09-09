@@ -1,10 +1,23 @@
 import { useMemo, useState } from 'react'
-import { Button, Card, Input, Segmented, Space, Table, Tag, Typography } from 'antd'
+import type { ReactNode } from 'react'
+import { Button, Card, Input, Segmented, Space, Table, Tag, Tooltip, Typography } from 'antd'
 import { ExportOutlined } from '@ant-design/icons'
 import type { AnalysisResult, Snapshot, VideoRecord } from '@shared/types'
 import { engagementRateOf } from '@shared/metrics'
+import { metricTooltip } from '../metricsInfo'
 import PageHeader from '../components/PageHeader'
 import { fmtDuration, fmtNum, fmtPct, fmtTime } from '../utils'
+
+function headWithTip(title: string, tip: string): ReactNode {
+  return (
+    <span>
+      {title}{' '}
+      <Tooltip title={<span style={{ whiteSpace: 'pre-line' }}>{tip}</span>}>
+        <span style={{ color: 'rgba(148,163,184,0.8)', fontSize: 11, cursor: 'help' }}>?</span>
+      </Tooltip>
+    </span>
+  )
+}
 
 interface Props {
   snapshot: Snapshot | null
@@ -71,9 +84,9 @@ export default function VideosPage({ snapshot, analysis }: Props) {
       )
     },
     { title: '发布时间', dataIndex: 'publishTime', width: 140, render: fmtTime },
-    { title: '时长', dataIndex: 'durationSec', width: 90, render: fmtDuration },
+    { title: headWithTip('时长', '视频长度；悬停数值行可见原始格式'), dataIndex: 'durationSec', width: 90, render: fmtDuration },
     {
-      title: '播放量',
+      title: headWithTip('播放量', metricTooltip('plays')),
       dataIndex: 'plays',
       width: 110,
       align: 'right' as const,
@@ -81,7 +94,7 @@ export default function VideosPage({ snapshot, analysis }: Props) {
       render: fmtNum
     },
     {
-      title: '互动率',
+      title: headWithTip('互动率', metricTooltip('engagementRate')),
       key: 'engagement',
       width: 100,
       align: 'right' as const,
@@ -89,7 +102,7 @@ export default function VideosPage({ snapshot, analysis }: Props) {
       render: (_: unknown, r: VideoRecord) => fmtPct(engagementRateOf(r))
     },
     {
-      title: '完播率',
+      title: headWithTip('完播率', metricTooltip('completionRate')),
       dataIndex: 'completionRate',
       width: 100,
       align: 'right' as const,

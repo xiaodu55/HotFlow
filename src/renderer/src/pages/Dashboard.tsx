@@ -1,14 +1,28 @@
 import { useMemo, useState } from 'react'
-import { Button, Card, Col, Empty, List, Row, Segmented, Select, Tag, Tooltip } from 'antd'
-import { DownloadOutlined } from '@ant-design/icons'
+import type { ReactNode } from 'react'
+import { Button, Card, Col, Empty, List, Row, Segmented, Select, Space, Tag, Tooltip } from 'antd'
+import { DownloadOutlined, QuestionCircleOutlined } from '@ant-design/icons'
 import type { AnalysisResult, SnapshotMeta, VideoDiff, VideoRecord } from '@shared/types'
 import type { EChartsOption } from 'echarts'
 import * as echarts from 'echarts'
 import { engagementRateOf } from '@shared/metrics'
+import { metricTooltip } from '../metricsInfo'
 import Chart from '../components/Chart'
 import KpiCard from '../components/KpiCard'
 import PageHeader from '../components/PageHeader'
 import { fmtNum, fmtPct, fmtTime } from '../utils'
+
+/** 卡片标题 + 口径说明图标 */
+function MetricTitle({ tip, text }: { tip: string; text: string }): ReactNode {
+  return (
+    <span>
+      {text}{' '}
+      <Tooltip title={<span style={{ whiteSpace: 'pre-line' }}>{tip}</span>}>
+        <QuestionCircleOutlined style={{ color: 'rgba(148,163,184,0.8)', fontSize: 12 }} />
+      </Tooltip>
+    </span>
+  )
+}
 
 interface Props {
   analysis: AnalysisResult | null
@@ -66,11 +80,16 @@ function DiffList({
       title={<span style={{ color }}>{title}</span>}
       styles={{ body: { paddingTop: 0 } }}
       extra={
-        onExport && items.length > 0 ? (
-          <Button type="text" size="small" icon={<DownloadOutlined />} onClick={onExport}>
-            CSV
-          </Button>
-        ) : undefined
+        <Space size={4}>
+          <Tooltip title={<span style={{ whiteSpace: 'pre-line' }}>{metricTooltip('videoDiffs')}</span>}>
+            <QuestionCircleOutlined style={{ color: 'rgba(148,163,184,0.8)', fontSize: 12 }} />
+          </Tooltip>
+          {onExport && items.length > 0 ? (
+            <Button type="text" size="small" icon={<DownloadOutlined />} onClick={onExport}>
+              CSV
+            </Button>
+          ) : null}
+        </Space>
       }
     >
       {items.length === 0 ? (
@@ -268,21 +287,21 @@ export default function DashboardPage({ analysis, snapshots, compareId, onCompar
     ]
   }
 
-  const kpis = [
-    { label: '视频总数', value: totals.videoCount, key: 'videoCount', fmt: fmtNum, suffix: '条' },
-    { label: '总播放', value: totals.plays, key: 'plays', fmt: fmtNum, suffix: undefined },
-    { label: '篇均播放', value: totals.avgPlays, key: 'avgPlays', fmt: fmtNum, suffix: undefined },
-    { label: '互动率', value: totals.engagementRate, key: 'engagementRate', fmt: fmtPct, suffix: undefined, tooltip: '(赞+评+转+藏)/播放' },
+  const kpis: Array<{ label: string; value: number; key: string; fmt: (n: number) => string; suffix?: string; tip: string }> = [
+    { label: '视频总数', value: totals.videoCount, key: 'videoCount', fmt: fmtNum, suffix: '条', tip: metricTooltip('videoCount') },
+    { label: '总播放', value: totals.plays, key: 'plays', fmt: fmtNum, tip: metricTooltip('plays') },
+    { label: '篇均播放', value: totals.avgPlays, key: 'avgPlays', fmt: fmtNum, tip: metricTooltip('avgPlays') },
+    { label: '互动率', value: totals.engagementRate, key: 'engagementRate', fmt: fmtPct, tip: metricTooltip('engagementRate') },
     ...(totals.completionRate != null
-      ? [{ label: '平均完播率', value: totals.completionRate, key: 'completionRate', fmt: fmtPct, suffix: undefined }]
+      ? [{ label: '平均完播率', value: totals.completionRate, key: 'completionRate', fmt: fmtPct, tip: metricTooltip('completionRate') }]
       : []),
     ...(totals.followsGained != null
-      ? [{ label: '涨粉', value: totals.followsGained, key: 'followsGained', fmt: fmtNum, suffix: undefined }]
+      ? [{ label: '涨粉', value: totals.followsGained, key: 'followsGained', fmt: fmtNum, tip: metricTooltip('followsGained') }]
       : []),
-    { label: '总点赞', value: totals.likes, key: 'likes', fmt: fmtNum, suffix: undefined },
-    { label: '总评论', value: totals.comments, key: 'comments', fmt: fmtNum, suffix: undefined },
-    { label: '总分享', value: totals.shares, key: 'shares', fmt: fmtNum, suffix: undefined },
-    { label: '总收藏', value: totals.collects, key: 'collects', fmt: fmtNum, suffix: undefined }
+    { label: '总点赞', value: totals.likes, key: 'likes', fmt: fmtNum, tip: metricTooltip('likes') },
+    { label: '总评论', value: totals.comments, key: 'comments', fmt: fmtNum, tip: metricTooltip('comments') },
+    { label: '总分享', value: totals.shares, key: 'shares', fmt: fmtNum, tip: metricTooltip('shares') },
+    { label: '总收藏', value: totals.collects, key: 'collects', fmt: fmtNum, tip: metricTooltip('collects') }
   ]
 
   return (
@@ -315,15 +334,15 @@ export default function DashboardPage({ analysis, snapshots, compareId, onCompar
                 value={increments.plays}
                 format={(n) => (n >= 0 ? '' : '-') + fmtNum(Math.abs(n))}
                 glowIndex={0}
-                tooltip={`与对比期同名视频累计差求和（匹配 ${increments.matched} 条），比总播放更接近"本期真实表现"`}
+                tooltip={metricTooltip('incPlays')}
               />
             </Col>
             <Col xs={12} sm={8} md={6} lg={4} xl={4}>
-              <KpiCard label="本期净增点赞" value={increments.likes} format={fmtNum} glowIndex={1} />
+              <KpiCard label="本期净增点赞" value={increments.likes} format={fmtNum} glowIndex={1} tooltip={metricTooltip('incLikes')} />
             </Col>
             {increments.followsGained != null && (
               <Col xs={12} sm={8} md={6} lg={4} xl={4}>
-                <KpiCard label="本期净增涨粉" value={increments.followsGained} format={fmtNum} glowIndex={3} />
+                <KpiCard label="本期净增涨粉" value={increments.followsGained} format={fmtNum} glowIndex={3} tooltip={metricTooltip('incFollows')} />
               </Col>
             )}
           </>
@@ -335,7 +354,7 @@ export default function DashboardPage({ analysis, snapshots, compareId, onCompar
               value={k.value}
               format={k.fmt}
               suffix={k.suffix}
-              tooltip={k.tooltip}
+              tooltip={k.tip}
               delta={analysis.deltas?.[k.key]}
               glowIndex={i}
             />
@@ -355,12 +374,10 @@ export default function DashboardPage({ analysis, snapshots, compareId, onCompar
         <Card
           size="small"
           title={
-            <>
-              发布趋势{' '}
-              <Tag color="cyan" bordered={false}>
-                {analysis.trendGranularity === 'day' ? '按日' : analysis.trendGranularity === 'week' ? '按周' : '按月'}
-              </Tag>
-            </>
+            <MetricTitle
+              tip={metricTooltip('trendChart')}
+              text={`发布趋势 ${analysis.trendGranularity === 'day' ? '（按日）' : analysis.trendGranularity === 'week' ? '（按周）' : '（按月）'}`}
+            />
           }
           style={{ marginBottom: 16 }}
         >
@@ -369,15 +386,7 @@ export default function DashboardPage({ analysis, snapshots, compareId, onCompar
       )}
 
       {analysis.incrementTrend.length > 0 && (
-        <Card
-          size="small"
-          title={
-            <>
-              净增趋势 <Tag color="cyan" bordered={false}>相邻两次导入之间</Tag>
-            </>
-          }
-          style={{ marginBottom: 16 }}
-        >
+        <Card size="small" title={<MetricTitle tip={metricTooltip('incrementTrend')} text="净增趋势" />}>
           <Chart option={incrementOption} />
         </Card>
       )}
@@ -385,14 +394,14 @@ export default function DashboardPage({ analysis, snapshots, compareId, onCompar
       <Row gutter={16}>
         {analysis.hourStats.length > 0 && (
           <Col xs={24} lg={12} style={{ marginBottom: 16 }}>
-            <Card size="small" title="发布时段 × 平均表现">
+            <Card size="small" title={<MetricTitle tip={metricTooltip('hourChart')} text="发布时段 × 平均表现" />}>
               <Chart option={hourOption} />
             </Card>
           </Col>
         )}
         {analysis.durationBuckets.length > 0 && (
           <Col xs={24} lg={12} style={{ marginBottom: 16 }}>
-            <Card size="small" title="视频时长 × 平均表现">
+            <Card size="small" title={<MetricTitle tip={metricTooltip('durationChart')} text="视频时长 × 平均表现" />}>
               <Chart option={durationOption} />
             </Card>
           </Col>

@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import type { ReactNode } from 'react'
-import { Tag } from 'antd'
+import { Tooltip } from 'antd'
 import type { Delta } from '@shared/types'
 import { useCountUp } from '../hooks/useCountUp'
 
@@ -38,6 +38,7 @@ interface Props {
   format: (n: number) => string
   delta?: Delta
   suffix?: string
+  /** 指标口径说明（悬停显示，含公式与解读） */
   tooltip?: string
   /** 光斑配色索引，缺省按顺序循环 */
   glowIndex?: number
@@ -47,7 +48,15 @@ export default function KpiCard({ label, value, format, delta, suffix, tooltip, 
   const animated = useCountUp(value)
   const glow = useMemo(() => GLOWS[(glowIndex ?? 0) % GLOWS.length], [glowIndex])
 
-  const labelNode: ReactNode = tooltip ? <span title={tooltip}>{label}</span> : label
+  const labelNode: ReactNode = tooltip ? (
+    <Tooltip title={<span style={{ whiteSpace: 'pre-line' }}>{tooltip}</span>}>
+      <span className="kpi-label-help">
+        {label} <span className="kpi-q">?</span>
+      </span>
+    </Tooltip>
+  ) : (
+    label
+  )
 
   return (
     <div className="kpi-card">
@@ -61,7 +70,9 @@ export default function KpiCard({ label, value, format, delta, suffix, tooltip, 
         {delta ? (
           <>
             <DeltaTag delta={delta} unit={suffix} />
-            <span className="kpi-vs">对比上期</span>
+            <Tooltip title="累计口径的环比变化；想看本期真实表现请看净增卡">
+              <span className="kpi-vs">对比上期</span>
+            </Tooltip>
           </>
         ) : null}
       </div>
