@@ -1,0 +1,107 @@
+import { BrowserWindow, dialog, ipcMain } from 'electron'
+import { writeFile } from 'fs/promises'
+import { runAnalysis } from '@shared/metrics'
+import type { AppSettings } from '@shared/types'
+import { importFromFile } from './ingest'
+import {
+  deleteSnapshot,
+  findPreviousSnapshot,
+  listSnapshots,
+  loadDiagnosis,
+  loadSnapshot,
+  saveDiagnosis
+} from './history'
+import { runDiagnosis, testLlm } from './llm'
+import { buildReportHtml } from './report'
+import { loadSettings, saveSettings } from './settings'
+
+function pad(n: number): string {
+  return String(n).padStart(2, '0')
+}
+
+export function registerIpc(): void {
+  ipcMain.handle('app:pickAndImport', async (e, platformId: string) => {
+    const win = BrowserWindow.fromWebContents(e.sender)
+    const res = await dialog.showOpenDialog(win ?? ({} as never), {
+      title: '选择平台导出的数据表格',
+      filters: [{ name: '表格文件', extensions: ['xlsx', 'xls', 'csv'] }],
+      properties: ['openFile']
+    })
+    if (res.canceled || res.filePaths.length === 0) return null
+    return { snapshot: await importFromFile(res.filePaths[0], platformId) }
+  })
+
+  ipcMain.handle('app:listSnapshots', () => listSnapshots())
+
+  ipcMain.handle('app:getSnapshot', async (_e, id: string) => {
+    const snapshot = await loadSnapshot(id)
+    if (!snapshot) throw new Error('数据快照不存在或已被删除')
+    return { snapshot, diagnosis: await loadDiagnosis(id) }
+  })
+
+  ipcMain.handle('app:deleteSnapshot', (_e, id: string) => deleteSnapshot(id))
+
+  ipcMain.handle('app:runAnalysis', async (_e, snapshotId: string, compareId?: string) => {
+    const snapshot = await loadSnapshot(snapshotId)
+    if (!snapshot) throw new Error('数据快照不存在或已被删除')
+    let compare = compareId ? await loadSnapshot(compareId) : null
+    if (!compare) {
+      const meta = await findPreviousSnapshot(snapshot.platform, snapshot.importedAt)
+      if (meta) compare = await loadSnapshot(meta.id)
+    }
+    return runAnalysis(snapshot, compare)
+  })
+
+  ipcMain.handle('app:getSettings', () => loadSettings())
+  ipcMain.handle('app:saveSettings', (_e, settings: AppSettings) => saveSettings(settings))
+  ipcMain.handle('app:testLlm', async () => {
+    const settings = await loadSettings()
+    return testLlm(settings.llm)
+  })
+
+  ipcMain.handle('app:runDiagnosis', async (e, snapshotId: string) => {
+    const snapshot = await loadSnapshot(snapshotId)
+    if (!snapshot) throw new Error('数据快照不存在或已被删除')
+    const settings = await loadSettings()
+    const meta = await findPreviousSnapshot(snapshot.platform, snapshot.importedAt)
+    const compare = meta ? await loadSnapshot(meta.id) : null
+    const analysis = runAnalysis(snapshot, compare)
+    const diagnosis = await runDiagnosis(settings.llm, snapshot, analysis, (text) => {
+      if (!e.sender.isDestroyed()) e.sender.send('llm:chunk', text)
+    })
+    await saveDiagnosis(snapshotId, diagnosis)
+    return diagnosis
+  })
+
+  ipcMain.handle('app:buildReport', async (_e, snapshotId: string) => {
+    const snapshot = await loadSnapshot(snapshotId)
+    if (!snapshot) throw new Error('数据快照不存在或已被删除')
+    const meta = await findPreviousSnapshot(snapshot.platform, snapshot.importedAt)
+    const compare = meta ? await loadSnapshot(meta.id) : null
+    const analysis = runAnalysis(snapshot, compare)
+    const diagnosis = await loadDiagnosis(snapshotId)
+    return { html: buildReportHtml(analysis, diagnosis) }
+  })
+
+  ipcMain.handle('app:exportReport', async (e, snapshotId: string) => {
+    const snapshot = await loadSnapshot(snapshotId)
+    if (!snapshot) throw new Error('数据快照不存在或已被删除')
+    const meta = await findPreviousSnapshot(snapshot.platform, snapshot.importedAt)
+    const compare = meta ? await loadSnapshot(meta.id) : null
+    const analysis = runAnalysis(snapshot, compare)
+    const diagnosis = await loadDiagnosis(snapshotId)
+    const html = buildReportHtml(analysis, diagnosis)
+
+    const win = BrowserWindow.fromWebContents(e.sender)
+    const d = new Date()
+    const stamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}`
+    const res = await dialog.showSaveDialog(win ?? ({} as never), {
+      title: '导出分析报告',
+      defaultPath: `HotFlow_运营分析报告_${stamp}.html`,
+      filters: [{ name: 'HTML 报告', extensions: ['html'] }]
+    })
+    if (res.canceled || !res.filePath) return { canceled: true }
+    await writeFile(res.filePath, html, 'utf-8')
+    return { canceled: false, path: res.filePath }
+  })
+}

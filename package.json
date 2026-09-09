@@ -1,0 +1,58 @@
+{
+  "name": "hotflow",
+  "version": "0.1.0",
+  "description": "HotFlow — 视频运营分析 Agent：导入平台导出表格，自动生成指标分析、内容诊断与发布策略报告",
+  "main": "out/main/index.js",
+  "private": true,
+  "build": {
+    "appId": "com.hotflow.desktop",
+    "productName": "HotFlow 视频运营分析",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "out/**"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "test": "vitest run",
+    "sample": "node scripts/gen-sample.mjs",
+    "dist": "electron-vite build && electron-builder --win"
+  },
+  "dependencies": {
+    "@ant-design/icons": "^6.3.4",
+    "antd": "^6.6.3",
+    "echarts": "^6.1.0",
+    "exceljs": "^4.4.0",
+    "openai": "^7.12.1",
+    "papaparse": "^5.7.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.5.0",
+    "@types/papaparse": "^5.5.2",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "@vitejs/plugin-react": "^4.7.0",
+    "electron": "^44.3.0",
+    "electron-builder": "^26.15.3",
+    "electron-vite": "^5.0.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.6",
+    "vitest": "^5.0.0"
+  }
+}
