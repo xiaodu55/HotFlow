@@ -291,12 +291,12 @@ ${echartsTag}
   if (D.trendLabels.length) {
     mk('trend', {
       tooltip: { trigger: 'axis' },
-      legend: { data: ['播放量', '互动率%'] },
-      grid: { left: 60, right: 60, top: 40, bottom: 30 },
-      xAxis: { type: 'category', data: D.trendLabels },
+      legend: { top: 0, data: ['播放量', '互动率%'] },
+      grid: { left: 8, right: 8, top: 48, bottom: 4, containLabel: true },
+      xAxis: { type: 'category', data: D.trendLabels, axisLabel: { fontSize: 11 } },
       yAxis: [
-        { type: 'value', name: '播放量', axisLabel: { formatter: function (v) { return v >= 10000 ? (v / 10000) + '万' : v; } } },
-        { type: 'value', name: '互动率%', axisLabel: { formatter: '{value}%' } }
+        { type: 'value', axisLabel: { formatter: function (v) { return v >= 10000 ? (v / 10000) + '万' : v; } } },
+        { type: 'value', axisLabel: { formatter: '{value}%' } }
       ],
       series: [
         { name: '播放量', type: 'line', smooth: true, data: D.trendPlays, itemStyle: { color: '#4f6ef7' }, areaStyle: { opacity: 0.08 } },
@@ -307,12 +307,12 @@ ${echartsTag}
   if (D.hourLabels.length) {
     mk('hour', {
       tooltip: { trigger: 'axis' },
-      legend: { data: ['篇均播放', '互动率%'] },
-      grid: { left: 60, right: 60, top: 40, bottom: 30 },
-      xAxis: { type: 'category', data: D.hourLabels },
+      legend: { top: 0, data: ['篇均播放', '互动率%'] },
+      grid: { left: 8, right: 8, top: 48, bottom: 4, containLabel: true },
+      xAxis: { type: 'category', data: D.hourLabels, axisLabel: { interval: 0, fontSize: 11 } },
       yAxis: [
-        { type: 'value', name: '篇均播放', axisLabel: { formatter: function (v) { return v >= 10000 ? (v / 10000) + '万' : v; } } },
-        { type: 'value', name: '互动率%', axisLabel: { formatter: '{value}%' } }
+        { type: 'value', axisLabel: { formatter: function (v) { return v >= 10000 ? (v / 10000) + '万' : v; } } },
+        { type: 'value', axisLabel: { formatter: '{value}%' } }
       ],
       series: [
         { name: '篇均播放', type: 'bar', data: D.hourPlays, itemStyle: { color: '#4f6ef7', borderRadius: [4, 4, 0, 0] } },
@@ -323,12 +323,12 @@ ${echartsTag}
   if (D.durLabels.length) {
     mk('duration', {
       tooltip: { trigger: 'axis' },
-      legend: { data: ['平均完播率%', '篇均播放'] },
-      grid: { left: 60, right: 60, top: 40, bottom: 30 },
-      xAxis: { type: 'category', data: D.durLabels },
+      legend: { top: 0, data: ['平均完播率%', '篇均播放'] },
+      grid: { left: 8, right: 8, top: 48, bottom: 4, containLabel: true },
+      xAxis: { type: 'category', data: D.durLabels, axisLabel: { interval: 0, fontSize: 11 } },
       yAxis: [
-        { type: 'value', name: '完播率%', axisLabel: { formatter: '{value}%' } },
-        { type: 'value', name: '篇均播放', axisLabel: { formatter: function (v) { return v >= 10000 ? (v / 10000) + '万' : v; } } }
+        { type: 'value', axisLabel: { formatter: '{value}%' } },
+        { type: 'value', axisLabel: { formatter: function (v) { return v >= 10000 ? (v / 10000) + '万' : v; } } }
       ],
       series: [
         { name: '平均完播率%', type: 'bar', data: D.durCompletion, itemStyle: { color: '#10b981', borderRadius: [4, 4, 0, 0] } },

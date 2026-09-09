@@ -155,12 +155,12 @@ export default function DashboardPage({ analysis, snapshots, compareId, onCompar
 
   const trendOption: EChartsOption = {
     tooltip: { trigger: 'axis' },
-    legend: { data: ['播放量', '互动率'] },
-    grid: { left: 70, right: 60, top: 40, bottom: 30 },
-    xAxis: { type: 'category', data: analysis.trend.map((b) => b.label) },
+    legend: { top: 0, data: ['播放量', '互动率'] },
+    grid: { left: 8, right: 8, top: 48, bottom: 4, containLabel: true },
+    xAxis: { type: 'category', data: analysis.trend.map((b) => b.label), axisLabel: { fontSize: 11 } },
     yAxis: [
-      { type: 'value', name: '播放量' },
-      { type: 'value', name: '互动率', axisLabel: { formatter: '{value}%' } }
+      { type: 'value' },
+      { type: 'value', axisLabel: { formatter: '{value}%' } }
     ],
     series: [
       {
@@ -186,12 +186,12 @@ export default function DashboardPage({ analysis, snapshots, compareId, onCompar
 
   const hourOption: EChartsOption = {
     tooltip: { trigger: 'axis' },
-    legend: { data: ['篇均播放', '互动率'] },
-    grid: { left: 70, right: 60, top: 40, bottom: 30 },
-    xAxis: { type: 'category', data: analysis.hourStats.map((h) => h.label) },
+    legend: { top: 0, data: ['篇均播放', '互动率'] },
+    grid: { left: 8, right: 8, top: 48, bottom: 4, containLabel: true },
+    xAxis: { type: 'category', data: analysis.hourStats.map((h) => h.label), axisLabel: { interval: 0, fontSize: 11 } },
     yAxis: [
-      { type: 'value', name: '篇均播放' },
-      { type: 'value', name: '互动率', axisLabel: { formatter: '{value}%' } }
+      { type: 'value' },
+      { type: 'value', axisLabel: { formatter: '{value}%' } }
     ],
     series: [
       {
@@ -214,12 +214,12 @@ export default function DashboardPage({ analysis, snapshots, compareId, onCompar
 
   const durationOption: EChartsOption = {
     tooltip: { trigger: 'axis' },
-    legend: { data: ['平均完播率', '篇均播放'] },
-    grid: { left: 70, right: 60, top: 40, bottom: 30 },
-    xAxis: { type: 'category', data: analysis.durationBuckets.map((d) => d.label) },
+    legend: { top: 0, data: ['平均完播率', '篇均播放'] },
+    grid: { left: 8, right: 8, top: 48, bottom: 4, containLabel: true },
+    xAxis: { type: 'category', data: analysis.durationBuckets.map((d) => d.label), axisLabel: { interval: 0, fontSize: 11 } },
     yAxis: [
-      { type: 'value', name: '完播率', axisLabel: { formatter: '{value}%' } },
-      { type: 'value', name: '篇均播放' }
+      { type: 'value', axisLabel: { formatter: '{value}%' } },
+      { type: 'value' }
     ],
     series: [
       {
