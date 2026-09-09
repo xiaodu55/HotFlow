@@ -4,6 +4,7 @@ import {
   computeHourStats,
   computeTotals,
   computeTrend,
+  computeVideoDiffs,
   engagementRateOf,
   runAnalysis
 } from '../src/shared/metrics'
@@ -132,6 +133,34 @@ describe('matchColumns', () => {
     expect(fieldColumns.likes).toBe('赞')
     expect(fieldColumns.comments).toBe('留言')
     expect(unmappedColumns).toEqual([])
+  })
+})
+
+describe('computeVideoDiffs', () => {
+  it('按标题匹配两期并计算涨跌', () => {
+    const cur = [
+      rec({ title: '爆款A', plays: 2000, likes: 60, comments: 20 }),
+      rec({ title: '爆款B', plays: 500, likes: 10 }),
+      rec({ title: '新视频C', plays: 99999 })
+    ]
+    const prev = [
+      rec({ title: '爆款A', plays: 1000, likes: 40, comments: 10 }),
+      rec({ title: '爆款B', plays: 800, likes: 12 })
+    ]
+    const result = computeVideoDiffs(cur, prev)
+    expect(result.matched).toBe(2)
+    expect(result.up[0].title).toBe('爆款A')
+    expect(result.up[0].playsDiff).toBe(1000)
+    expect(result.up[0].playsDiffPercent).toBe(100)
+    expect(result.down[0].title).toBe('爆款B')
+    expect(result.down[0].playsDiff).toBe(-300)
+  })
+  it('上期播放为 0 时百分比置空', () => {
+    const result = computeVideoDiffs(
+      [rec({ title: 'X', plays: 100 })],
+      [rec({ title: 'X', plays: 0 })]
+    )
+    expect(result.up[0].playsDiffPercent).toBeNull()
   })
 })
 

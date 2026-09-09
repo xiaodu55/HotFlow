@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react'
-import { Card, Input, Space, Table, Tag, Typography } from 'antd'
+import { Button, Card, Input, Segmented, Space, Table, Tag, Typography } from 'antd'
+import { ExportOutlined } from '@ant-design/icons'
 import type { AnalysisResult, Snapshot, VideoRecord } from '@shared/types'
 import { engagementRateOf } from '@shared/metrics'
+import PageHeader from '../components/PageHeader'
 import { fmtDuration, fmtNum, fmtPct, fmtTime } from '../utils'
 
 interface Props {
@@ -11,15 +13,10 @@ interface Props {
 
 export default function VideosPage({ snapshot, analysis }: Props) {
   const [search, setSearch] = useState('')
+  const [density, setDensity] = useState<'small' | 'middle' | 'large'>('middle')
 
-  const topIds = useMemo(
-    () => new Set((analysis?.topByPlays ?? []).map((r) => r.id)),
-    [analysis]
-  )
-  const bottomIds = useMemo(
-    () => new Set((analysis?.bottomByPlays ?? []).map((r) => r.id)),
-    [analysis]
-  )
+  const topIds = useMemo(() => new Set((analysis?.topByPlays ?? []).map((r) => r.id)), [analysis])
+  const bottomIds = useMemo(() => new Set((analysis?.bottomByPlays ?? []).map((r) => r.id)), [analysis])
 
   const data = useMemo(() => {
     const records = snapshot?.records ?? []
@@ -27,12 +24,51 @@ export default function VideosPage({ snapshot, analysis }: Props) {
     return records.filter((r) => r.title.includes(search.trim()))
   }, [snapshot, search])
 
+  function exportCsv() {
+    if (!snapshot) return
+    const header = ['标题', '发布时间', '时长(秒)', '播放量', '点赞', '评论', '分享', '收藏', '涨粉', '完播率(%)', '平均播放时长(秒)', '互动率(%)']
+    const esc = (v: string | number | null): string => {
+      const s = v == null ? '' : String(v)
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+    }
+    const lines = [header.join(',')]
+    for (const r of snapshot.records) {
+      lines.push(
+        [
+          esc(r.title),
+          esc(r.publishTime ?? ''),
+          r.durationSec ?? '',
+          r.plays,
+          r.likes,
+          r.comments,
+          r.shares,
+          r.collects,
+          r.followsGained ?? '',
+          r.completionRate ?? '',
+          r.avgWatchSec ?? '',
+          engagementRateOf(r)
+        ].join(',')
+      )
+    }
+    const blob = new Blob(['\uFEFF' + lines.join('\n')], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `HotFlow_视频明细_${snapshot.fileName.replace(/\.(xlsx|xls|csv)$/i, '')}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   const columns = [
     {
       title: '标题',
       dataIndex: 'title',
       ellipsis: true,
-      render: (v: string) => <Typography.Text ellipsis style={{ maxWidth: 360 }}>{v}</Typography.Text>
+      render: (v: string) => (
+        <Typography.Text ellipsis style={{ maxWidth: 360 }}>
+          {v}
+        </Typography.Text>
+      )
     },
     { title: '发布时间', dataIndex: 'publishTime', width: 140, render: fmtTime },
     { title: '时长', dataIndex: 'durationSec', width: 90, render: fmtDuration },
@@ -95,34 +131,49 @@ export default function VideosPage({ snapshot, analysis }: Props) {
   ]
 
   return (
-    <Card
-      size="small"
-      title="视频明细"
-      styles={{ body: { paddingTop: 12 } }}
-      extra={
-        <Space>
-          <Tag color="green">绿底 = 播放 Top5</Tag>
-          <Tag color="red">红底 = 播放 Bottom5</Tag>
-          <Input.Search
-            placeholder="搜索标题"
-            allowClear
-            style={{ width: 220 }}
-            onSearch={setSearch}
-            onChange={(e) => {
-              if (!e.target.value) setSearch('')
-            }}
-          />
-        </Space>
-      }
-    >
-      <Table<VideoRecord>
-        rowKey="id"
-        dataSource={data}
-        columns={columns}
-        size="middle"
-        pagination={{ pageSize: 20, showSizeChanger: false, showTotal: (t) => `共 ${t} 条` }}
-        rowClassName={(r) => (topIds.has(r.id) ? 'row-top' : bottomIds.has(r.id) ? 'row-bottom' : '')}
+    <div>
+      <PageHeader
+        title="视频明细"
+        description={snapshot ? `${snapshot.fileName} · ${snapshot.recordCount} 条视频` : undefined}
+        extra={
+          <Space>
+            <Tag color="green" bordered={false}>绿底 = 播放 Top5</Tag>
+            <Tag color="red" bordered={false}>红底 = 播放 Bottom5</Tag>
+            <Segmented
+              size="small"
+              value={density}
+              onChange={(v) => setDensity(v as typeof density)}
+              options={[
+                { value: 'large', label: '宽松' },
+                { value: 'middle', label: '中等' },
+                { value: 'small', label: '紧凑' }
+              ]}
+            />
+            <Input.Search
+              placeholder="搜索标题"
+              allowClear
+              style={{ width: 200 }}
+              onSearch={setSearch}
+              onChange={(e) => {
+                if (!e.target.value) setSearch('')
+              }}
+            />
+            <Button icon={<ExportOutlined />} onClick={exportCsv} disabled={!snapshot}>
+              导出 CSV
+            </Button>
+          </Space>
+        }
       />
-    </Card>
+      <Card size="small" styles={{ body: { paddingTop: 12 } }}>
+        <Table<VideoRecord>
+          rowKey="id"
+          dataSource={data}
+          columns={columns}
+          size={density}
+          pagination={{ pageSize: 20, showSizeChanger: false, showTotal: (t) => `共 ${t} 条` }}
+          rowClassName={(r) => (topIds.has(r.id) ? 'row-top' : bottomIds.has(r.id) ? 'row-bottom' : '')}
+        />
+      </Card>
+    </div>
   )
 }

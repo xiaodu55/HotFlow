@@ -4,9 +4,9 @@ import * as ExcelJS from 'exceljs'
 import Papa from 'papaparse'
 import { getPlatform } from '@shared/platforms'
 import { normalizeHeader } from '@shared/parse'
-import { mapRecords } from '@shared/normalize'
+import { mapRecords, matchColumns } from '@shared/normalize'
 import { saveSnapshot } from './history'
-import type { Snapshot } from '@shared/types'
+import type { Snapshot, TableInspect } from '@shared/types'
 
 /** exceljs 单元格值可能是富文本/公式/超链接对象，展平成原始值 */
 function cellValue(v: ExcelJS.CellValue): unknown {
@@ -81,6 +81,29 @@ export async function readTable(filePath: string): Promise<{ headers: string[]; 
     if (filled > 0) rows.push(row)
   }
   return { headers: headers.filter(Boolean), rows }
+}
+
+/** 只读解析表格，返回列映射预检结果（不落库） */
+export async function inspectTable(filePath: string, platformId: string): Promise<TableInspect> {
+  const platform = getPlatform(platformId)
+  const table = await readTable(filePath)
+  const { fieldColumns, unmappedColumns } = matchColumns(table.headers, platform)
+  const samples: Record<string, string> = {}
+  for (const h of table.headers) {
+    const first = table.rows.find((row) => {
+      const v = row[h]
+      return v !== null && v !== undefined && String(v).trim() !== ''
+    })
+    if (first) samples[h] = String(first[h]).slice(0, 40)
+  }
+  return {
+    fileName: filePath.split(/[\\/]/).pop() ?? filePath,
+    headers: table.headers,
+    rowCount: table.rows.length,
+    fieldColumns,
+    unmappedColumns,
+    samples
+  }
 }
 
 export async function importFromFile(filePath: string, platformId: string): Promise<Snapshot> {

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import * as echarts from 'echarts'
 import type { EChartsOption } from 'echarts'
+import { ensureEchartsThemes, useTheme } from '../theme'
 
 interface Props {
   option: EChartsOption
@@ -10,10 +11,13 @@ interface Props {
 export default function Chart({ option, height = 320 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<echarts.ECharts | null>(null)
+  const { mode } = useTheme()
+  const themeName = mode === 'dark' ? 'hotflow-dark' : 'hotflow-light'
 
   useEffect(() => {
+    ensureEchartsThemes()
     if (!containerRef.current) return
-    const chart = echarts.init(containerRef.current)
+    const chart = echarts.init(containerRef.current, themeName)
     chartRef.current = chart
     const ro = new ResizeObserver(() => chart.resize())
     ro.observe(containerRef.current)
@@ -22,7 +26,7 @@ export default function Chart({ option, height = 320 }: Props) {
       chart.dispose()
       chartRef.current = null
     }
-  }, [])
+  }, [themeName])
 
   useEffect(() => {
     chartRef.current?.setOption(option, true)

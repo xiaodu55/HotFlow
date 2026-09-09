@@ -8,6 +8,8 @@ import type {
   SnapshotMeta,
   Totals,
   TrendBucket,
+  VideoDiff,
+  VideoDiffsResult,
   VideoRecord
 } from './types'
 
@@ -213,12 +215,47 @@ export function rankRecords(records: VideoRecord[]): {
   topByPlays: VideoRecord[]
   bottomByPlays: VideoRecord[]
   topByEngagement: VideoRecord[]
+  bottomByEngagement: VideoRecord[]
 } {
   const byPlays = [...records].sort((a, b) => b.plays - a.plays)
-  const topByPlays = byPlays.slice(0, 5)
-  const bottomByPlays = [...byPlays].reverse().slice(0, 5)
-  const topByEngagement = [...records].sort((a, b) => engagementRateOf(b) - engagementRateOf(a)).slice(0, 5)
-  return { topByPlays, bottomByPlays, topByEngagement }
+  const byEngagement = [...records].sort((a, b) => engagementRateOf(b) - engagementRateOf(a))
+  return {
+    topByPlays: byPlays.slice(0, 5),
+    bottomByPlays: [...byPlays].reverse().slice(0, 5),
+    topByEngagement: byEngagement.slice(0, 5),
+    bottomByEngagement: [...byEngagement].reverse().slice(0, 5)
+  }
+}
+
+/** 按标题精确匹配两期视频，计算播放/互动涨跌 */
+export function computeVideoDiffs(cur: VideoRecord[], prev: VideoRecord[]): VideoDiffsResult {
+  const prevByTitle = new Map<string, VideoRecord>()
+  for (const r of prev) prevByTitle.set(r.title.trim(), r)
+
+  const diffs: VideoDiff[] = []
+  for (const r of cur) {
+    const p = prevByTitle.get(r.title.trim())
+    if (!p) continue
+    const playsDiff = r.plays - p.plays
+    diffs.push({
+      title: r.title,
+      curPlays: r.plays,
+      prevPlays: p.plays,
+      playsDiff,
+      playsDiffPercent: p.plays !== 0 ? round2((playsDiff / p.plays) * 100) : null,
+      curEngagement: engagementRateOf(r),
+      prevEngagement: engagementRateOf(p)
+    })
+  }
+  diffs.sort((a, b) => b.playsDiff - a.playsDiff)
+  return {
+    matched: diffs.length,
+    up: diffs.filter((d) => d.playsDiff > 0).slice(0, 5),
+    down: diffs
+      .filter((d) => d.playsDiff < 0)
+      .reverse()
+      .slice(0, 5)
+  }
 }
 
 function toMeta(s: Snapshot): SnapshotMeta {
@@ -230,17 +267,21 @@ function toMeta(s: Snapshot): SnapshotMeta {
 export function runAnalysis(snapshot: Snapshot, compare: Snapshot | null): AnalysisResult {
   const { records, ...meta } = snapshot
   const totals = computeTotals(records)
-  const { topByPlays, bottomByPlays, topByEngagement } = rankRecords(records)
+  const { topByPlays, bottomByPlays, topByEngagement, bottomByEngagement } = rankRecords(records)
   const { granularity, buckets } = computeTrend(records)
+  const prevTotals = compare ? computeTotals(compare.records) : null
   return {
     snapshot: meta,
     compareSnapshot: compare ? toMeta(compare) : null,
     generatedAt: new Date().toISOString(),
     totals,
-    deltas: compare ? computeDeltas(totals, computeTotals(compare.records)) : null,
+    prevTotals,
+    deltas: prevTotals ? computeDeltas(totals, prevTotals) : null,
     topByPlays,
     bottomByPlays,
     topByEngagement,
+    bottomByEngagement,
+    videoDiffs: compare ? computeVideoDiffs(records, compare.records) : null,
     trend: buckets,
     trendGranularity: granularity,
     hourStats: computeHourStats(records),

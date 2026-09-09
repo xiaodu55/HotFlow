@@ -77,8 +77,48 @@ function listSection(title: string, items: string[], cls: string): string {
   </div>`
 }
 
-function diagnosisHtml(diagnosis: DiagnosisResult | null): string {
-  if (!diagnosis) {
+/** 两期整体指标对比表（环比明细） */
+function deltaTableHtml(analysis: AnalysisResult): string {
+  const { totals, prevTotals, deltas } = analysis
+  if (!prevTotals || !deltas) return ''
+  const rows: Array<[string, number | null, number | null, (n: number | null) => string]> = [
+    ['视频总数', totals.videoCount, prevTotals.videoCount, fmtNum],
+    ['总播放', totals.plays, prevTotals.plays, fmtNum],
+    ['篇均播放', totals.avgPlays, prevTotals.avgPlays, fmtNum],
+    ['互动率', totals.engagementRate, prevTotals.engagementRate, fmtPct],
+    ['总点赞', totals.likes, prevTotals.likes, fmtNum],
+    ['总评论', totals.comments, prevTotals.comments, fmtNum],
+    ['总分享', totals.shares, prevTotals.shares, fmtNum],
+    ['总收藏', totals.collects, prevTotals.collects, fmtNum],
+    ['涨粉', totals.followsGained, prevTotals.followsGained, fmtNum],
+    ['平均完播率', totals.completionRate, prevTotals.completionRate, fmtPct]
+  ]
+  const body = rows
+    .filter(([, cur, prev]) => cur != null || prev != null)
+    .map(([label, cur, prev, fmt]) => {
+      const d = deltas[label] ?? null
+      const arrow =
+        d?.direction === 'up' ? '<span class="delta up">↑</span>' : d?.direction === 'down' ? '<span class="delta down">↓</span>' : '<span class="delta flat">→</span>'
+      const pct = d?.percent != null ? `${Math.abs(d.percent).toFixed(1)}%` : '—'
+      return `<tr><td>${esc(label)}</td><td class="num">${fmt(prev)}</td><td class="num">${fmt(cur)}</td><td class="num">${arrow}</td><td class="num">${pct}</td></tr>`
+    })
+    .join('')
+  return `<tr><th>指标</th><th>上期</th><th>本期</th><th>方向</th><th>幅度</th></tr><tbody>${body}</tbody>`
+}
+
+/** 从分时段数据提炼一句话结论 */
+function hourInsightHtml(analysis: AnalysisResult): string {
+  if (analysis.hourStats.length < 2) return ''
+  const best = [...analysis.hourStats].sort((a, b) => b.avgPlays - a.avgPlays)[0]
+  const worst = [...analysis.hourStats].sort((a, b) => a.avgPlays - b.avgPlays)[0]
+  if (best.avgPlays <= 0) return ''
+  const ratio = worst.avgPlays > 0 ? (best.avgPlays / worst.avgPlays).toFixed(1) : null
+  return `<p class="insight">📌 时段结论：<b>${esc(best.label)}</b> 发布的视频篇均播放最高（${fmtNum(best.avgPlays)}）${
+    ratio ? `，约为 <b>${esc(worst.label)}</b>（${fmtNum(worst.avgPlays)}）的 ${ratio} 倍` : ''
+  }；互动率最高的是 <b>${esc([...analysis.hourStats].sort((a, b) => b.avgEngagementRate - a.avgEngagementRate)[0].label)}</b>。</p>`
+}
+
+function diagnosisHtml(diagnosis: DiagnosisResult | null): string {  if (!diagnosis) {
     return `<div class="diag-empty">尚未生成 AI 诊断。在应用的「AI 诊断」页配置大模型并生成后，导出的报告会自动包含诊断结论。</div>`
   }
   const parts: string[] = []
@@ -167,6 +207,11 @@ export function buildReportHtml(analysis: AnalysisResult, diagnosis: DiagnosisRe
   .diag-raw { white-space: pre-wrap; background: #f8f9fc; padding: 14px; border-radius: 8px; font-size: 13px; line-height: 1.7; }
   .diag-meta { color: #9ca3af; font-size: 12px; margin-top: 10px; }
   .footer { color: #9ca3af; font-size: 12px; text-align: center; padding: 8px 0 24px; }
+  .insight { font-size: 13.5px; line-height: 1.8; color: #374151; background: #f0fdfa; border-left: 3px solid #10b981; border-radius: 0 8px 8px 0; padding: 10px 14px; margin-top: 4px; }
+  @media print {
+    body { background: #fff; padding: 0; }
+    .card { box-shadow: none; border: 1px solid #e5e7eb; break-inside: avoid; }
+  }
 </style>
 </head>
 <body>
@@ -196,11 +241,17 @@ export function buildReportHtml(analysis: AnalysisResult, diagnosis: DiagnosisRe
   </div>
 
   ${
+    analysis.compareSnapshot && analysis.prevTotals
+      ? `<div class="card"><h3>两期对比明细</h3><table>${deltaTableHtml(analysis)}</table></div>`
+      : ''
+  }
+
+  ${
     analysis.trend.length
       ? `<div class="card"><h3>发布趋势（${granularityNote}）</h3><div id="trend" class="chart"></div></div>`
       : ''
   }
-  ${analysis.hourStats.length ? `<div class="card"><h3>发布时段 × 平均表现</h3><div id="hour" class="chart"></div></div>` : ''}
+  ${analysis.hourStats.length ? `<div class="card"><h3>发布时段 × 平均表现</h3><div id="hour" class="chart"></div>${hourInsightHtml(analysis)}</div>` : ''}
   ${analysis.durationBuckets.length ? `<div class="card"><h3>视频时长 × 平均表现</h3><div id="duration" class="chart"></div></div>` : ''}
 
   <div class="card">

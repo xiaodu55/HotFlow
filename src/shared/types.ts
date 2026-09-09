@@ -88,14 +88,50 @@ export interface AnalysisResult {
   compareSnapshot: SnapshotMeta | null
   generatedAt: string
   totals: Totals
+  /** 对比期的整体指标，无对比时为 null */
+  prevTotals: Totals | null
   deltas: Deltas | null
   topByPlays: VideoRecord[]
   bottomByPlays: VideoRecord[]
   topByEngagement: VideoRecord[]
+  bottomByEngagement: VideoRecord[]
+  /** 按标题匹配两期视频的涨跌榜，无对比时为 null */
+  videoDiffs: VideoDiffsResult | null
   trend: TrendBucket[]
   trendGranularity: 'day' | 'week' | 'month'
   hourStats: HourStat[]
   durationBuckets: DurationBucket[]
+}
+
+/** 两期同名视频的涨跌对比（按标题精确匹配） */
+export interface VideoDiff {
+  title: string
+  curPlays: number
+  prevPlays: number
+  playsDiff: number
+  playsDiffPercent: number | null
+  curEngagement: number
+  prevEngagement: number
+}
+
+export interface VideoDiffsResult {
+  matched: number
+  /** 播放增量最大的前 5 条 */
+  up: VideoDiff[]
+  /** 播放跌幅最大的前 5 条 */
+  down: VideoDiff[]
+}
+
+/** 导入前的列映射预检结果（只读解析，不落库） */
+export interface TableInspect {
+  fileName: string
+  headers: string[]
+  rowCount: number
+  /** 标准字段 → 匹配到的列名 */
+  fieldColumns: Record<string, string>
+  unmappedColumns: string[]
+  /** 列名 → 该列首个非空样例值 */
+  samples: Record<string, string>
 }
 
 /** LLM 诊断与建议的结构化结果 */
@@ -111,6 +147,8 @@ export interface DiagnosisResult {
   rawText?: string
   model?: string
   generatedAt: string
+  /** 诊断后的追问对话记录 */
+  conversation?: Array<{ question: string; answer: string }>
 }
 
 export type LlmProviderId = 'deepseek' | 'zhipu' | 'dashscope' | 'custom'
@@ -124,6 +162,7 @@ export interface LlmConfig {
 
 export interface AppSettings {
   llm: LlmConfig
+  windowBounds?: { x: number; y: number; width: number; height: number }
 }
 
 export interface ImportOutcome {

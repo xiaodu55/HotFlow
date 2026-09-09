@@ -2,7 +2,7 @@ import { BrowserWindow, dialog, ipcMain } from 'electron'
 import { writeFile } from 'fs/promises'
 import { runAnalysis } from '@shared/metrics'
 import type { AppSettings } from '@shared/types'
-import { importFromFile } from './ingest'
+import { importFromFile, inspectTable } from './ingest'
 import {
   deleteSnapshot,
   findPreviousSnapshot,
@@ -11,12 +11,19 @@ import {
   loadSnapshot,
   saveDiagnosis
 } from './history'
-import { runDiagnosis, testLlm } from './llm'
+import { askFollowUp, runDiagnosis, testLlm } from './llm'
 import { buildReportHtml } from './report'
 import { loadSettings, saveSettings } from './settings'
 
 function pad(n: number): string {
   return String(n).padStart(2, '0')
+}
+
+/** 解析对比期：显式指定用显式值，否则自动选同平台的上一次导入 */
+async function resolveCompare(snapshotPlatform: string, snapshotImportedAt: string, compareId?: string) {
+  if (compareId) return loadSnapshot(compareId)
+  const meta = await findPreviousSnapshot(snapshotPlatform, snapshotImportedAt)
+  return meta ? loadSnapshot(meta.id) : null
 }
 
 export function registerIpc(): void {
@@ -31,6 +38,14 @@ export function registerIpc(): void {
     return { snapshot: await importFromFile(res.filePaths[0], platformId) }
   })
 
+  ipcMain.handle('app:inspectTable', async (_e, filePath: string, platformId: string) =>
+    inspectTable(filePath, platformId)
+  )
+
+  ipcMain.handle('app:importFile', async (_e, filePath: string, platformId: string) => ({
+    snapshot: await importFromFile(filePath, platformId)
+  }))
+
   ipcMain.handle('app:listSnapshots', () => listSnapshots())
 
   ipcMain.handle('app:getSnapshot', async (_e, id: string) => {
@@ -44,11 +59,7 @@ export function registerIpc(): void {
   ipcMain.handle('app:runAnalysis', async (_e, snapshotId: string, compareId?: string) => {
     const snapshot = await loadSnapshot(snapshotId)
     if (!snapshot) throw new Error('数据快照不存在或已被删除')
-    let compare = compareId ? await loadSnapshot(compareId) : null
-    if (!compare) {
-      const meta = await findPreviousSnapshot(snapshot.platform, snapshot.importedAt)
-      if (meta) compare = await loadSnapshot(meta.id)
-    }
+    const compare = await resolveCompare(snapshot.platform, snapshot.importedAt, compareId)
     return runAnalysis(snapshot, compare)
   })
 
@@ -59,12 +70,11 @@ export function registerIpc(): void {
     return testLlm(settings.llm)
   })
 
-  ipcMain.handle('app:runDiagnosis', async (e, snapshotId: string) => {
+  ipcMain.handle('app:runDiagnosis', async (e, snapshotId: string, compareId?: string) => {
     const snapshot = await loadSnapshot(snapshotId)
     if (!snapshot) throw new Error('数据快照不存在或已被删除')
     const settings = await loadSettings()
-    const meta = await findPreviousSnapshot(snapshot.platform, snapshot.importedAt)
-    const compare = meta ? await loadSnapshot(meta.id) : null
+    const compare = await resolveCompare(snapshot.platform, snapshot.importedAt, compareId)
     const analysis = runAnalysis(snapshot, compare)
     const diagnosis = await runDiagnosis(settings.llm, snapshot, analysis, (text) => {
       if (!e.sender.isDestroyed()) e.sender.send('llm:chunk', text)
@@ -73,21 +83,39 @@ export function registerIpc(): void {
     return diagnosis
   })
 
-  ipcMain.handle('app:buildReport', async (_e, snapshotId: string) => {
+  ipcMain.handle('app:askDiagnosis', async (e, snapshotId: string, question: string) => {
     const snapshot = await loadSnapshot(snapshotId)
     if (!snapshot) throw new Error('数据快照不存在或已被删除')
+    const diagnosis = await loadDiagnosis(snapshotId)
+    if (!diagnosis) throw new Error('请先生成 AI 诊断，再进行追问')
+    const settings = await loadSettings()
     const meta = await findPreviousSnapshot(snapshot.platform, snapshot.importedAt)
     const compare = meta ? await loadSnapshot(meta.id) : null
+    const analysis = runAnalysis(snapshot, compare)
+    const answer = await askFollowUp(settings.llm, snapshot, analysis, diagnosis, question, (text) => {
+      if (!e.sender.isDestroyed()) e.sender.send('llm:chunk', text)
+    })
+    const updated: typeof diagnosis = {
+      ...diagnosis,
+      conversation: [...(diagnosis.conversation ?? []), { question, answer }]
+    }
+    await saveDiagnosis(snapshotId, updated)
+    return updated
+  })
+
+  ipcMain.handle('app:buildReport', async (_e, snapshotId: string, compareId?: string) => {
+    const snapshot = await loadSnapshot(snapshotId)
+    if (!snapshot) throw new Error('数据快照不存在或已被删除')
+    const compare = await resolveCompare(snapshot.platform, snapshot.importedAt, compareId)
     const analysis = runAnalysis(snapshot, compare)
     const diagnosis = await loadDiagnosis(snapshotId)
     return { html: buildReportHtml(analysis, diagnosis) }
   })
 
-  ipcMain.handle('app:exportReport', async (e, snapshotId: string) => {
+  ipcMain.handle('app:exportReport', async (e, snapshotId: string, compareId?: string) => {
     const snapshot = await loadSnapshot(snapshotId)
     if (!snapshot) throw new Error('数据快照不存在或已被删除')
-    const meta = await findPreviousSnapshot(snapshot.platform, snapshot.importedAt)
-    const compare = meta ? await loadSnapshot(meta.id) : null
+    const compare = await resolveCompare(snapshot.platform, snapshot.importedAt, compareId)
     const analysis = runAnalysis(snapshot, compare)
     const diagnosis = await loadDiagnosis(snapshotId)
     const html = buildReportHtml(analysis, diagnosis)

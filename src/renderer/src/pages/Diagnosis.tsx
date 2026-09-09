@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import { Alert, App, Button, Card, Descriptions, Empty, List, Result, Space, Typography } from 'antd'
-import { RobotOutlined, ThunderboltOutlined } from '@ant-design/icons'
+import { Alert, App, Button, Card, Descriptions, Empty, Input, List, Result, Space, Spin, Typography } from 'antd'
+import { RobotOutlined, SendOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import type { AppSettings, DiagnosisResult } from '@shared/types'
+import PageHeader from '../components/PageHeader'
 import type { PageKey } from '../App'
 
 interface Props {
@@ -11,6 +12,7 @@ interface Props {
   onDiagnosis: (d: DiagnosisResult) => void
   settings: AppSettings | null
   onNavigate: (page: PageKey) => void
+  compareId: string | undefined
 }
 
 function listBlock(title: string, items: string[], color: string): ReactNode {
@@ -35,11 +37,13 @@ export default function DiagnosisPage({
   diagnosis,
   onDiagnosis,
   settings,
-  onNavigate
+  onNavigate,
+  compareId
 }: Props) {
   const { message } = App.useApp()
   const [streaming, setStreaming] = useState(false)
   const [streamText, setStreamText] = useState('')
+  const [question, setQuestion] = useState('')
 
   const llmReady = Boolean(
     settings && settings.llm.apiKey.trim() && settings.llm.baseURL.trim() && settings.llm.model.trim()
@@ -52,11 +56,27 @@ export default function DiagnosisPage({
     setStreaming(true)
     setStreamText('')
     try {
-      const d = await window.api.runDiagnosis(currentId)
+      const d = await window.api.runDiagnosis(currentId, compareId)
       onDiagnosis(d)
       message.success('AI 诊断完成')
     } catch (err) {
       message.error(`诊断失败：${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setStreaming(false)
+    }
+  }
+
+  async function ask() {
+    const q = question.trim()
+    if (!q || !currentId || !diagnosis) return
+    setQuestion('')
+    setStreaming(true)
+    setStreamText('')
+    try {
+      const d = await window.api.askDiagnosis(currentId, q)
+      onDiagnosis(d)
+    } catch (err) {
+      message.error(`追问失败：${err instanceof Error ? err.message : String(err)}`)
     } finally {
       setStreaming(false)
     }
@@ -82,25 +102,25 @@ export default function DiagnosisPage({
     )
   }
 
+  const conversation = diagnosis?.conversation ?? []
+
   return (
     <div style={{ maxWidth: 900, margin: '0 auto' }}>
+      <PageHeader title="AI 内容诊断" description="基于当前数据与所选对比期生成诊断；生成后可继续追问" />
+
       <Card
         title={
           <Space>
             <RobotOutlined />
-            AI 内容诊断与发布策略
+            诊断报告
           </Space>
         }
         extra={
-          <Button
-            type="primary"
-            icon={<ThunderboltOutlined />}
-            loading={streaming}
-            onClick={run}
-          >
+          <Button type="primary" icon={<ThunderboltOutlined />} loading={streaming} onClick={run}>
             {diagnosis ? '重新生成' : '生成诊断'}
           </Button>
         }
+        style={{ marginBottom: 16 }}
       >
         {!diagnosis && !streaming && (
           <Typography.Paragraph type="secondary">
@@ -111,7 +131,7 @@ export default function DiagnosisPage({
 
         {streaming && (
           <>
-            <Alert type="info" showIcon message="模型分析中，以下是实时输出…" style={{ marginBottom: 12 }} />
+            <Alert type="info" showIcon message="模型输出中…" style={{ marginBottom: 12 }} />
             <div className="stream-box">{streamText || '正在连接模型…'}</div>
           </>
         )}
@@ -134,27 +154,56 @@ export default function DiagnosisPage({
               </>
             ) : (
               <>
-                {listBlock('爆款共性', diagnosis.hotPatterns, '#16a34a')}
-                {listBlock('低效视频归因', diagnosis.weakPatterns, '#dc2626')}
+                {listBlock('爆款共性', diagnosis.hotPatterns, '#34d399')}
+                {listBlock('低效视频归因', diagnosis.weakPatterns, '#f87171')}
                 {diagnosis.titleNotes && (
                   <Card size="small" title="标题 / 封面诊断" style={{ marginBottom: 16 }}>
-                    <Typography.Paragraph style={{ marginBottom: 0 }}>
-                      {diagnosis.titleNotes}
-                    </Typography.Paragraph>
+                    <Typography.Paragraph style={{ marginBottom: 0 }}>{diagnosis.titleNotes}</Typography.Paragraph>
                   </Card>
                 )}
-                {listBlock('发布时间建议', diagnosis.advicePublishTime, '#4f6ef7')}
-                {listBlock('选题方向建议', diagnosis.adviceTopics, '#4f6ef7')}
-                {listBlock('行动清单', diagnosis.adviceActions, '#d97706')}
+                {listBlock('发布时间建议', diagnosis.advicePublishTime, '#22d3ee')}
+                {listBlock('选题方向建议', diagnosis.adviceTopics, '#22d3ee')}
+                {listBlock('行动清单', diagnosis.adviceActions, '#fbbf24')}
               </>
             )}
             <Descriptions size="small" column={1}>
               <Descriptions.Item label="模型">{diagnosis.model ?? '—'}</Descriptions.Item>
-              <Descriptions.Item label="生成时间">{diagnosis.generatedAt.replace('T', ' ').slice(0, 19)}</Descriptions.Item>
+              <Descriptions.Item label="生成时间">
+                {diagnosis.generatedAt.replace('T', ' ').slice(0, 19)}
+              </Descriptions.Item>
             </Descriptions>
           </>
         )}
       </Card>
+
+      {diagnosis && !diagnosis.rawText && (
+        <Card title="追问" styles={{ body: { paddingTop: 16 } }}>
+          {conversation.map((turn, i) => (
+            <div className="qa-block" key={i}>
+              <div className="qa-question">Q：{turn.question}</div>
+              <div className="qa-answer">{turn.answer}</div>
+            </div>
+          ))}
+          {streaming && <div className="stream-box">{streamText || '思考中…'}</div>}
+          <Space.Compact style={{ width: '100%', marginTop: 12 }}>
+            <Input
+              placeholder="例如：为什么 19 点发布的视频效果最好？下期选题有什么建议？"
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              onPressEnter={() => void ask()}
+              disabled={streaming}
+            />
+            <Button type="primary" icon={<SendOutlined />} loading={streaming} onClick={() => void ask()}>
+              发送
+            </Button>
+          </Space.Compact>
+          {conversation.length > 0 && (
+            <Typography.Paragraph type="secondary" style={{ marginTop: 8, fontSize: 12 }}>
+              追问记录会随诊断一起保存在本机。
+            </Typography.Paragraph>
+          )}
+        </Card>
+      )}
     </div>
   )
 }

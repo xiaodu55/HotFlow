@@ -149,3 +149,51 @@ export async function runDiagnosis(
   }
   return parseDiagnosis(full, cfg.model)
 }
+
+const FOLLOWUP_SYSTEM = `你是资深短视频运营专家。此前你已经基于该账号的视频运营数据输出过一份诊断报告。
+现在用户会针对这份诊断继续提问。请结合此前的诊断结论和下方的原始数据回答问题：
+回答要具体、引用数据、可直接执行；用中文；直接输出回答正文，不要输出 JSON 或代码块。`
+
+/** 基于已有诊断继续追问，返回纯文本回答 */
+export async function askFollowUp(
+  cfg: LlmConfig,
+  snapshot: Snapshot,
+  analysis: AnalysisResult,
+  diagnosis: DiagnosisResult,
+  question: string,
+  onChunk?: (text: string) => void
+): Promise<string> {
+  if (!isLlmConfigured(cfg)) throw new Error('尚未配置大模型，请先到「设置」页填写 API Key')
+  const client = new OpenAI({ apiKey: cfg.apiKey.trim(), baseURL: cfg.baseURL.trim() })
+
+  const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+    { role: 'system', content: FOLLOWUP_SYSTEM },
+    { role: 'user', content: buildUserPayload(snapshot, analysis) }
+  ]
+  const priorConversation = diagnosis.conversation ?? []
+  for (const turn of priorConversation) {
+    messages.push({ role: 'user', content: turn.question })
+    messages.push({ role: 'assistant', content: turn.answer })
+  }
+  messages.push({
+    role: 'user',
+    content: `此前诊断结论要点：${diagnosis.summary}\n爆款共性：${diagnosis.hotPatterns.join('；')}\n\n用户追问：${question}`
+  })
+
+  const stream = await client.chat.completions.create({
+    model: cfg.model.trim(),
+    messages,
+    stream: true,
+    temperature: 0.4
+  })
+
+  let full = ''
+  for await (const chunk of stream) {
+    const delta = chunk.choices?.[0]?.delta?.content ?? ''
+    if (delta) {
+      full += delta
+      onChunk?.(delta)
+    }
+  }
+  return full.trim()
+}

@@ -1,0 +1,70 @@
+import { useMemo } from 'react'
+import type { ReactNode } from 'react'
+import { Tag } from 'antd'
+import type { Delta } from '@shared/types'
+import { useCountUp } from '../hooks/useCountUp'
+
+/** KPI 卡片霓虹光斑配色（循环取用） */
+const GLOWS = [
+  'rgba(34, 211, 238, 0.35)',
+  'rgba(129, 140, 248, 0.35)',
+  'rgba(232, 121, 249, 0.32)',
+  'rgba(52, 211, 153, 0.32)',
+  'rgba(251, 191, 36, 0.30)',
+  'rgba(56, 189, 248, 0.32)'
+]
+
+function DeltaTag({ delta, unit }: { delta?: Delta; unit?: string }) {
+  if (!delta || delta.direction === 'flat') {
+    return <span style={{ color: 'rgba(148,163,184,0.7)', fontSize: 12 }}>—</span>
+  }
+  const up = delta.direction === 'up'
+  const text =
+    delta.percent == null
+      ? `${up ? '↑' : '↓'} ${Math.abs(delta.value).toLocaleString('zh-CN')}${unit ?? ''}`
+      : `${up ? '↑' : '↓'} ${Math.abs(delta.percent).toFixed(1)}%`
+  return (
+    <span className={`delta-tag ${up ? 'delta-up' : 'delta-down'}`}>
+      {text}
+      {delta.percent != null ? '' : unit ?? ''}
+    </span>
+  )
+}
+
+interface Props {
+  label: string
+  /** 参与滚动动效的数值 */
+  value: number
+  format: (n: number) => string
+  delta?: Delta
+  suffix?: string
+  tooltip?: string
+  /** 光斑配色索引，缺省按顺序循环 */
+  glowIndex?: number
+}
+
+export default function KpiCard({ label, value, format, delta, suffix, tooltip, glowIndex }: Props) {
+  const animated = useCountUp(value)
+  const glow = useMemo(() => GLOWS[(glowIndex ?? 0) % GLOWS.length], [glowIndex])
+
+  const labelNode: ReactNode = tooltip ? <span title={tooltip}>{label}</span> : label
+
+  return (
+    <div className="kpi-card">
+      <div className="kpi-glow" style={{ background: `radial-gradient(120px 80px at 88% 0%, ${glow}, transparent 70%)` }} />
+      <div className="kpi-label">{labelNode}</div>
+      <div className="kpi-value">
+        <span className="grad-num">{format(animated)}</span>
+        {suffix ? <span className="kpi-suffix">{suffix}</span> : null}
+      </div>
+      <div className="kpi-delta">
+        {delta ? (
+          <>
+            <DeltaTag delta={delta} unit={suffix} />
+            <span className="kpi-vs">对比上期</span>
+          </>
+        ) : null}
+      </div>
+    </div>
+  )
+}

@@ -15,7 +15,8 @@ export async function loadSettings(): Promise<AppSettings> {
     const raw = await readFile(settingsFile(), 'utf-8')
     const parsed = JSON.parse(raw) as Partial<AppSettings>
     return {
-      llm: { ...DEFAULT_LLM_CONFIG, ...(parsed.llm ?? {}) }
+      llm: { ...DEFAULT_LLM_CONFIG, ...(parsed.llm ?? {}) },
+      windowBounds: parsed.windowBounds
     }
   } catch {
     return { ...DEFAULT_SETTINGS, llm: { ...DEFAULT_LLM_CONFIG } }
