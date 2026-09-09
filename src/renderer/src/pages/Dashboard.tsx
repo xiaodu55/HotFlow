@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { Card, Col, Empty, List, Row, Segmented, Select, Tag, Tooltip } from 'antd'
+import { Button, Card, Col, Empty, List, Row, Segmented, Select, Tag, Tooltip } from 'antd'
+import { DownloadOutlined } from '@ant-design/icons'
 import type { AnalysisResult, SnapshotMeta, VideoDiff, VideoRecord } from '@shared/types'
 import type { EChartsOption } from 'echarts'
 import * as echarts from 'echarts'
@@ -47,10 +48,31 @@ function VideoList({ title, records, highlight }: { title: string; records: Vide
   )
 }
 
-function DiffList({ title, items, up }: { title: string; items: VideoDiff[]; up: boolean }) {
+function DiffList({
+  title,
+  items,
+  up,
+  onExport
+}: {
+  title: string
+  items: VideoDiff[]
+  up: boolean
+  onExport?: () => void
+}) {
   const color = up ? '#34d399' : '#f87171'
   return (
-    <Card size="small" title={<span style={{ color }}>{title}</span>} styles={{ body: { paddingTop: 0 } }}>
+    <Card
+      size="small"
+      title={<span style={{ color }}>{title}</span>}
+      styles={{ body: { paddingTop: 0 } }}
+      extra={
+        onExport && items.length > 0 ? (
+          <Button type="text" size="small" icon={<DownloadOutlined />} onClick={onExport}>
+            CSV
+          </Button>
+        ) : undefined
+      }
+    >
       {items.length === 0 ? (
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有匹配到同标题视频" style={{ padding: 12 }} />
       ) : (
@@ -92,12 +114,38 @@ export default function DashboardPage({ analysis, snapshots, compareId, onCompar
   const compareOptions = useMemo(() => {
     if (!analysis) return []
     return snapshots
-      .filter((s) => s.platform === analysis.snapshot.platform && s.id !== analysis.snapshot.id)
-      .map((s) => ({ value: s.id, label: `${s.fileName}（${fmtTime(s.importedAt)} 导入）` }))
+      .filter(
+        (s) =>
+          s.platform === analysis.snapshot.platform &&
+          (s.account ?? '') === (analysis.snapshot.account ?? '') &&
+          s.id !== analysis.snapshot.id
+      )
+      .map((s) => ({ value: s.id, label: `${s.note || s.fileName}（${fmtTime(s.importedAt)}）` }))
   }, [analysis, snapshots])
 
+  function exportDiffs(items: VideoDiff[], name: string) {
+    const header = ['标题', '上期播放', '本期播放', '播放差值', '播放幅度(%)', '本期互动率(%)', '上期互动率(%)']
+    const esc = (v: string | number | null): string => {
+      const s = v == null ? '' : String(v)
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+    }
+    const lines = [header.join(',')]
+    for (const d of items) {
+      lines.push(
+        [esc(d.title), d.prevPlays, d.curPlays, d.playsDiff, d.playsDiffPercent ?? '', d.curEngagement, d.prevEngagement].join(',')
+      )
+    }
+    const blob = new Blob(['\uFEFF' + lines.join('\n')], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `HotFlow_涨跌榜_${name}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   if (!analysis) return null
-  const { totals } = analysis
+  const { totals, increments } = analysis
   const hasCompare = Boolean(analysis.compareSnapshot)
 
   const rankData =
@@ -192,6 +240,34 @@ export default function DashboardPage({ analysis, snapshots, compareId, onCompar
     ]
   }
 
+  const incrementOption: EChartsOption = {
+    tooltip: { trigger: 'axis' },
+    legend: { data: ['净增播放', '净增涨粉'] },
+    grid: { left: 70, right: 60, top: 40, bottom: 30 },
+    xAxis: { type: 'category', data: analysis.incrementTrend.map((p) => p.label) },
+    yAxis: [
+      { type: 'value', name: '净增播放' },
+      { type: 'value', name: '净增涨粉' }
+    ],
+    series: [
+      {
+        name: '净增播放',
+        type: 'bar',
+        data: analysis.incrementTrend.map((p) => p.plays),
+        itemStyle: { borderRadius: [5, 5, 0, 0], color: vGradient('#22d3ee', 'aa', '22') },
+        barMaxWidth: 30
+      },
+      {
+        name: '净增涨粉',
+        type: 'line',
+        yAxisIndex: 1,
+        data: analysis.incrementTrend.map((p) => p.followsGained),
+        itemStyle: { color: '#34d399' },
+        lineStyle: { width: 2 }
+      }
+    ]
+  }
+
   const kpis = [
     { label: '视频总数', value: totals.videoCount, key: 'videoCount', fmt: fmtNum, suffix: '条' },
     { label: '总播放', value: totals.plays, key: 'plays', fmt: fmtNum, suffix: undefined },
@@ -213,7 +289,9 @@ export default function DashboardPage({ analysis, snapshots, compareId, onCompar
     <div style={{ maxWidth: 1240, margin: '0 auto' }}>
       <PageHeader
         title="数据看板"
-        description={`${analysis.snapshot.platformLabel} · ${analysis.snapshot.fileName} · ${analysis.snapshot.recordCount} 条视频`}
+        description={`${analysis.snapshot.platformLabel} · ${analysis.snapshot.account || '未命名账号'}${
+          analysis.snapshot.note ? ` · ${analysis.snapshot.note}` : ''
+        } · ${analysis.snapshot.fileName} · ${analysis.snapshot.recordCount} 条视频`}
         extra={
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 12, color: 'rgba(148,163,184,0.9)' }}>对比期</span>
@@ -229,6 +307,27 @@ export default function DashboardPage({ analysis, snapshots, compareId, onCompar
       />
 
       <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
+        {increments && (
+          <>
+            <Col xs={12} sm={8} md={6} lg={4} xl={4}>
+              <KpiCard
+                label="本期净增播放"
+                value={increments.plays}
+                format={(n) => (n >= 0 ? '' : '-') + fmtNum(Math.abs(n))}
+                glowIndex={0}
+                tooltip={`与对比期同名视频累计差求和（匹配 ${increments.matched} 条），比总播放更接近"本期真实表现"`}
+              />
+            </Col>
+            <Col xs={12} sm={8} md={6} lg={4} xl={4}>
+              <KpiCard label="本期净增点赞" value={increments.likes} format={fmtNum} glowIndex={1} />
+            </Col>
+            {increments.followsGained != null && (
+              <Col xs={12} sm={8} md={6} lg={4} xl={4}>
+                <KpiCard label="本期净增涨粉" value={increments.followsGained} format={fmtNum} glowIndex={3} />
+              </Col>
+            )}
+          </>
+        )}
         {kpis.map((k, i) => (
           <Col xs={12} sm={8} md={6} lg={4} xl={4} key={k.key}>
             <KpiCard
@@ -269,6 +368,20 @@ export default function DashboardPage({ analysis, snapshots, compareId, onCompar
         </Card>
       )}
 
+      {analysis.incrementTrend.length > 0 && (
+        <Card
+          size="small"
+          title={
+            <>
+              净增趋势 <Tag color="cyan" bordered={false}>相邻两次导入之间</Tag>
+            </>
+          }
+          style={{ marginBottom: 16 }}
+        >
+          <Chart option={incrementOption} />
+        </Card>
+      )}
+
       <Row gutter={16}>
         {analysis.hourStats.length > 0 && (
           <Col xs={24} lg={12} style={{ marginBottom: 16 }}>
@@ -289,10 +402,20 @@ export default function DashboardPage({ analysis, snapshots, compareId, onCompar
       {analysis.videoDiffs && (
         <Row gutter={16} style={{ marginBottom: 16 }}>
           <Col xs={24} md={12}>
-            <DiffList title="↑ 涨幅最大 Top 5" items={analysis.videoDiffs.up} up />
+            <DiffList
+              title="↑ 涨幅最大 Top 5"
+              items={analysis.videoDiffs.up}
+              up
+              onExport={() => exportDiffs(analysis.videoDiffs?.up ?? [], '涨幅')}
+            />
           </Col>
           <Col xs={24} md={12}>
-            <DiffList title="↓ 跌幅最大 Top 5" items={analysis.videoDiffs.down} up={false} />
+            <DiffList
+              title="↓ 跌幅最大 Top 5"
+              items={analysis.videoDiffs.down}
+              up={false}
+              onExport={() => exportDiffs(analysis.videoDiffs?.down ?? [], '跌幅')}
+            />
           </Col>
         </Row>
       )}

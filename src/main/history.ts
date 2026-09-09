@@ -23,9 +23,10 @@ export async function listSnapshots(): Promise<SnapshotMeta[]> {
   for (const f of files) {
     if (!f.endsWith('.json') || f.endsWith('.diagnosis.json')) continue
     try {
-      const snap = JSON.parse(await readFile(join(historyDir(), f), 'utf-8')) as Snapshot
-      const { records, ...meta } = snap
-      metas.push(meta)
+      const parsed = JSON.parse(await readFile(join(historyDir(), f), 'utf-8')) as Partial<Snapshot>
+      const { records, ...meta } = parsed
+      // 旧版快照无 account/note 字段，读取时兜底
+      metas.push({ account: '', note: '', ...meta } as SnapshotMeta)
     } catch {
       // 单个损坏文件不影响整体列表
     }
@@ -35,7 +36,8 @@ export async function listSnapshots(): Promise<SnapshotMeta[]> {
 
 export async function loadSnapshot(id: string): Promise<Snapshot | null> {
   try {
-    return JSON.parse(await readFile(snapshotFile(id), 'utf-8')) as Snapshot
+    const parsed = JSON.parse(await readFile(snapshotFile(id), 'utf-8')) as Partial<Snapshot>
+    return { account: '', note: '', ...parsed } as Snapshot
   } catch {
     return null
   }
@@ -60,8 +62,14 @@ export async function loadDiagnosis(id: string): Promise<DiagnosisResult | null>
   }
 }
 
-/** 找同平台、早于指定导入时间的最近一次导入，用作环比基线 */
-export async function findPreviousSnapshot(platform: string, importedAt: string): Promise<SnapshotMeta | null> {
+/** 找同平台、同账号、早于指定导入时间的最近一次导入，用作环比基线 */
+export async function findPreviousSnapshot(
+  platform: string,
+  importedAt: string,
+  account = ''
+): Promise<SnapshotMeta | null> {
   const metas = await listSnapshots()
-  return metas.find((m) => m.platform === platform && m.importedAt < importedAt) ?? null
+  return (
+    metas.find((m) => m.platform === platform && (m.account ?? '') === account && m.importedAt < importedAt) ?? null
+  )
 }

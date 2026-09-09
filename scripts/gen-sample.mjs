@@ -46,17 +46,37 @@ function videoRow(day, hour, minute, viralBoost) {
   return { title, day, hour, minute, durationSec, plays, likes, comments, shares, collects, follows, completion, avgWatch }
 }
 
-function buildRows(year, month, count) {
+function buildRows(year, month, count, baseRows = []) {
   const rows = []
-  for (let i = 0; i < count; i++) {
+  // 六成视频沿用上期（同名同发布时间，累计值增长），模拟真实运营中"同一批视频两次导出"
+  const carried = baseRows.slice(0, Math.ceil(count * 0.6))
+  for (const b of carried) {
+    rows.push({
+      ...b,
+      // 关键：沿用上期完整发布时间，同名同发布日才能跨期匹配
+      publishTimeStr: b.publishTimeStr,
+      plays: Math.round(b.plays * (1.15 + rand() * 0.5)),
+      likes: Math.round(b.likes * (1.12 + rand() * 0.45)),
+      comments: Math.round(b.comments * (1.1 + rand() * 0.5)),
+      shares: Math.round(b.shares * (1.1 + rand() * 0.5)),
+      collects: Math.round(b.collects * (1.1 + rand() * 0.5)),
+      follows: b.follows + randInt(5, 60),
+      completion: b.completion,
+      avgWatch: b.avgWatch + randInt(-3, 6)
+    })
+  }
+  for (let i = rows.length; i < count; i++) {
     const day = randInt(1, 28)
-    // 三成视频安排在晚间黄金档
     const hour = rand() < 0.3 ? randInt(19, 22) : randInt(7, 23)
     const minute = pick([0, 5, 10, 15, 30, 45])
     const viralBoost = rand() < 0.08 ? randInt(6, 15) : 1
-    rows.push(videoRow(day, hour, minute, viralBoost))
+    rows.push(makeRow(year, month, videoRow(day, hour, minute, viralBoost)))
   }
   return rows.sort((a, b) => a.day - b.day || a.hour - b.hour)
+}
+
+function makeRow(year, month, r) {
+  return { ...r, publishTimeStr: `${year}-${pad(month)}-${pad(r.day)} ${pad(r.hour)}:${pad(r.minute)}:00` }
 }
 
 function pad(n) {
@@ -68,7 +88,7 @@ async function writeSample(fileName, headers, rows, month) {
   const ws = wb.addWorksheet('作品数据')
   ws.addRow(headers)
   for (const r of rows) {
-    const publishTimeStr = `${new Date().getFullYear()}-${pad(month)}-${pad(r.day)} ${pad(r.hour)}:${pad(r.minute)}:00`
+    const publishTimeStr = r.publishTimeStr ?? `${new Date().getFullYear()}-${pad(month)}-${pad(r.day)} ${pad(r.hour)}:${pad(r.minute)}:00`
     const values = headers.map((h) => {
       switch (h) {
         case '作品名称':
@@ -120,16 +140,18 @@ async function writeSample(fileName, headers, rows, month) {
 
 mkdirSync(outDir, { recursive: true })
 
+const period1Rows = buildRows(2026, 7, 24)
+
 await writeSample(
   'sample_douyin_period1.xlsx',
   ['作品名称', '发布时间', '时长', '播放量', '点赞量', '评论量', '分享量', '收藏量', '涨粉数', '完播率', '平均播放时长'],
-  buildRows(2026, 7, 24),
+  period1Rows,
   7
 )
 
 await writeSample(
   'sample_douyin_period2.xlsx',
   ['视频标题', '发布时间', '视频时长(秒)', '播放次数', '点赞数', '评论数', '转发数', '收藏量', '涨粉数', '完播率(%)', '平均播放时长(秒)'],
-  buildRows(2026, 8, 26),
+  buildRows(2026, 8, 26, period1Rows),
   8
 )

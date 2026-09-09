@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react'
-import { Alert, App, Button, Card, Modal, Popconfirm, Select, Space, Steps, Table, Tag } from 'antd'
+import { useMemo, useRef, useState } from 'react'
+import { Alert, App, Button, Card, Input, Modal, Popconfirm, Select, Space, Steps, Table, Tag } from 'antd'
 import { InboxOutlined, DownloadOutlined } from '@ant-design/icons'
 import { FIELD_LABELS, PLATFORMS, type StandardField } from '@shared/platforms'
 import type { Snapshot, SnapshotMeta, TableInspect } from '@shared/types'
@@ -30,6 +30,8 @@ function loadLastPlatform(): string {
 export default function ImportPage({ snapshots, refresh, onOpen, onImported }: Props) {
   const { message } = App.useApp()
   const [platform, setPlatformState] = useState<string>(loadLastPlatform)
+  const [account, setAccount] = useState<string>(() => localStorage.getItem(`hotflow-account-${loadLastPlatform()}`) ?? '')
+  const [note, setNote] = useState('')
   const [importing, setImporting] = useState(false)
   const [outcomes, setOutcomes] = useState<ImportOutcomeRow[] | null>(null)
   const [inspect, setInspect] = useState<{ open: boolean; filePath: string; data: TableInspect | null }>({
@@ -42,16 +44,22 @@ export default function ImportPage({ snapshots, refresh, onOpen, onImported }: P
   function setPlatform(id: string) {
     setPlatformState(id)
     localStorage.setItem(PLATFORM_KEY, id)
+    setAccount(localStorage.getItem(`hotflow-account-${id}`) ?? '')
   }
 
-  async function importAll(paths: string[]) {
+  function setAccountSafe(v: string) {
+    setAccount(v)
+    localStorage.setItem(`hotflow-account-${platform}`, v)
+  }
+
+  async function importAll(paths: string[], periodNote = '') {
     setImporting(true)
     const rows: ImportOutcomeRow[] = []
     let lastId: string | null = null
     for (const p of paths) {
       const fileName = p.split(/[\\/]/).pop() ?? p
       try {
-        const { snapshot } = await window.api.importFile(p, platform)
+        const { snapshot } = await window.api.importFile(p, platform, { account: account.trim(), note: periodNote.trim() })
         rows.push({ fileName, ok: true, count: snapshot.recordCount })
         lastId = snapshot.id
       } catch (err) {
@@ -87,7 +95,14 @@ export default function ImportPage({ snapshots, refresh, onOpen, onImported }: P
     }
   }
 
-  const fieldByColumn = new Map(Object.entries(inspect.data?.fieldColumns ?? {}))
+  /** 反向映射：列名 → 字段中文名（inspect 返回的是 字段→列名） */
+  const labelByColumn = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const [field, col] of Object.entries(inspect.data?.fieldColumns ?? {})) {
+      m.set(col, FIELD_LABELS[field as StandardField] ?? field)
+    }
+    return m
+  }, [inspect.data])
 
   return (
     <div style={{ maxWidth: 980, margin: '0 auto' }}>
@@ -99,8 +114,15 @@ export default function ImportPage({ snapshots, refresh, onOpen, onImported }: P
             <Select
               value={platform}
               onChange={setPlatform}
-              style={{ width: 240 }}
+              style={{ width: 200 }}
               options={PLATFORMS.map((p) => ({ value: p.id, label: p.label }))}
+            />
+            <Input
+              value={account}
+              onChange={(e) => setAccountSafe(e.target.value)}
+              placeholder="账号名（多账号隔离）"
+              style={{ width: 190 }}
+              allowClear
             />
             <Button
               type="primary"
@@ -197,11 +219,17 @@ export default function ImportPage({ snapshots, refresh, onOpen, onImported }: P
               {
                 title: '平台',
                 dataIndex: 'platformLabel',
-                width: 110,
+                width: 100,
                 render: (v: string) => <Tag color="cyan" bordered={false}>{v}</Tag>
               },
-              { title: '文件名', dataIndex: 'fileName', ellipsis: true },
-              { title: '视频数', dataIndex: 'recordCount', width: 90 },
+              { title: '账号', dataIndex: 'account', width: 110, ellipsis: true, render: (v: string) => v || '—' },
+              {
+                title: '文件名',
+                dataIndex: 'fileName',
+                ellipsis: true,
+                render: (v: string, r) => (r.note ? `${v}（${r.note}）` : v)
+              },
+              { title: '视频数', dataIndex: 'recordCount', width: 80 },
               {
                 title: '操作',
                 key: 'action',
@@ -246,7 +274,8 @@ export default function ImportPage({ snapshots, refresh, onOpen, onImported }: P
             onClick={async () => {
               const p = inspect.filePath
               setInspect({ open: false, filePath: '', data: null })
-              await importAll([p])
+              await importAll([p], note)
+              setNote('')
             }}
           >
             确认导入
@@ -255,6 +284,14 @@ export default function ImportPage({ snapshots, refresh, onOpen, onImported }: P
       >
         {inspect.data && (
           <>
+            <Space direction="vertical" style={{ width: '100%', marginBottom: 12 }} size={8}>
+              <Input
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="周期备注（可选，如「8月第1周」）"
+                allowClear
+              />
+            </Space>
             <p style={{ marginTop: 0 }}>
               共解析出 <b>{inspect.data.rowCount}</b> 行数据，列识别结果如下：
             </p>
@@ -269,10 +306,10 @@ export default function ImportPage({ snapshots, refresh, onOpen, onImported }: P
                   dataIndex: 'header',
                   width: 140,
                   render: (h: string) => {
-                    const field = fieldByColumn.get(h)
-                    return field ? (
+                    const label = labelByColumn.get(h)
+                    return label ? (
                       <Tag color="cyan" bordered={false}>
-                        {FIELD_LABELS[field as StandardField]}
+                        {label}
                       </Tag>
                     ) : (
                       <Tag bordered={false}>未识别</Tag>

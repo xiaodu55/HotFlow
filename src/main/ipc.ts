@@ -1,8 +1,8 @@
 import { BrowserWindow, dialog, ipcMain } from 'electron'
 import { writeFile } from 'fs/promises'
-import { runAnalysis } from '@shared/metrics'
+import { computeIncrementTrend, computeIncrements, runAnalysis } from '@shared/metrics'
 import type { AppSettings } from '@shared/types'
-import { importFromFile, inspectTable } from './ingest'
+import { importFromFile, inspectTable, type ImportMeta } from './ingest'
 import {
   deleteSnapshot,
   findPreviousSnapshot,
@@ -19,11 +19,22 @@ function pad(n: number): string {
   return String(n).padStart(2, '0')
 }
 
-/** 解析对比期：显式指定用显式值，否则自动选同平台的上一次导入 */
-async function resolveCompare(snapshotPlatform: string, snapshotImportedAt: string, compareId?: string) {
+/** 解析对比期：显式指定用显式值，否则自动选同平台同账号的上一次导入 */
+async function resolveCompare(snapshotPlatform: string, snapshotImportedAt: string, snapshotAccount = '', compareId?: string) {
   if (compareId) return loadSnapshot(compareId)
-  const meta = await findPreviousSnapshot(snapshotPlatform, snapshotImportedAt)
+  const meta = await findPreviousSnapshot(snapshotPlatform, snapshotImportedAt, snapshotAccount)
   return meta ? loadSnapshot(meta.id) : null
+}
+
+/** 同平台同账号、不晚于指定时间的全部快照（升序），用于净增趋势 */
+async function loadAccountChain(platform: string, account = '', importedAt: string) {
+  const metas = (await listSnapshots()).filter(
+    (m) => m.platform === platform && (m.account ?? '') === account && m.importedAt <= importedAt
+  )
+  const snaps = (await Promise.all(metas.map((m) => loadSnapshot(m.id)))).filter(
+    (s): s is NonNullable<typeof s> => s != null
+  )
+  return snaps.sort((a, b) => (a.importedAt < b.importedAt ? -1 : 1))
 }
 
 export function registerIpc(): void {
@@ -42,8 +53,8 @@ export function registerIpc(): void {
     inspectTable(filePath, platformId)
   )
 
-  ipcMain.handle('app:importFile', async (_e, filePath: string, platformId: string) => ({
-    snapshot: await importFromFile(filePath, platformId)
+  ipcMain.handle('app:importFile', async (_e, filePath: string, platformId: string, meta?: ImportMeta) => ({
+    snapshot: await importFromFile(filePath, platformId, meta)
   }))
 
   ipcMain.handle('app:listSnapshots', () => listSnapshots())
@@ -59,8 +70,9 @@ export function registerIpc(): void {
   ipcMain.handle('app:runAnalysis', async (_e, snapshotId: string, compareId?: string) => {
     const snapshot = await loadSnapshot(snapshotId)
     if (!snapshot) throw new Error('数据快照不存在或已被删除')
-    const compare = await resolveCompare(snapshot.platform, snapshot.importedAt, compareId)
-    return runAnalysis(snapshot, compare)
+    const compare = await resolveCompare(snapshot.platform, snapshot.importedAt, snapshot.account, compareId)
+    const chain = await loadAccountChain(snapshot.platform, snapshot.account, snapshot.importedAt)
+    return runAnalysis(snapshot, compare, computeIncrementTrend(chain))
   })
 
   ipcMain.handle('app:getSettings', () => loadSettings())
@@ -74,7 +86,7 @@ export function registerIpc(): void {
     const snapshot = await loadSnapshot(snapshotId)
     if (!snapshot) throw new Error('数据快照不存在或已被删除')
     const settings = await loadSettings()
-    const compare = await resolveCompare(snapshot.platform, snapshot.importedAt, compareId)
+    const compare = await resolveCompare(snapshot.platform, snapshot.importedAt, snapshot.account, compareId)
     const analysis = runAnalysis(snapshot, compare)
     const diagnosis = await runDiagnosis(settings.llm, snapshot, analysis, (text) => {
       if (!e.sender.isDestroyed()) e.sender.send('llm:chunk', text)
@@ -89,8 +101,7 @@ export function registerIpc(): void {
     const diagnosis = await loadDiagnosis(snapshotId)
     if (!diagnosis) throw new Error('请先生成 AI 诊断，再进行追问')
     const settings = await loadSettings()
-    const meta = await findPreviousSnapshot(snapshot.platform, snapshot.importedAt)
-    const compare = meta ? await loadSnapshot(meta.id) : null
+    const compare = await resolveCompare(snapshot.platform, snapshot.importedAt, snapshot.account)
     const analysis = runAnalysis(snapshot, compare)
     const answer = await askFollowUp(settings.llm, snapshot, analysis, diagnosis, question, (text) => {
       if (!e.sender.isDestroyed()) e.sender.send('llm:chunk', text)

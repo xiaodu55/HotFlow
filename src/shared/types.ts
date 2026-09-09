@@ -20,6 +20,10 @@ export interface SnapshotMeta {
   id: string
   platform: string
   platformLabel: string
+  /** 账号名（同平台多账号隔离用），未填写为空串 */
+  account: string
+  /** 周期备注（如「8月第1周」），报告与历史列表展示 */
+  note: string
   fileName: string
   importedAt: string
   recordCount: number
@@ -91,6 +95,10 @@ export interface AnalysisResult {
   /** 对比期的整体指标，无对比时为 null */
   prevTotals: Totals | null
   deltas: Deltas | null
+  /** 本期净增（匹配到的同名视频累计值差求和），无对比时为 null */
+  increments: Increments | null
+  /** 同平台同账号、按导入时间排序的相邻快照净增序列 */
+  incrementTrend: IncrementPoint[]
   topByPlays: VideoRecord[]
   bottomByPlays: VideoRecord[]
   topByEngagement: VideoRecord[]
@@ -101,6 +109,40 @@ export interface AnalysisResult {
   trendGranularity: 'day' | 'week' | 'month'
   hourStats: HourStat[]
   durationBuckets: DurationBucket[]
+}
+
+/** 本期净增口径：匹配到的同名同发布日视频，本期累计值 − 上期累计值 求和 */
+export interface Increments {
+  plays: number
+  likes: number
+  comments: number
+  shares: number
+  collects: number
+  followsGained: number | null
+  /** 匹配到的视频对数 */
+  matched: number
+}
+
+/** 相邻两期快照之间的净增点（净增趋势用） */
+export interface IncrementPoint {
+  label: string
+  importedAt: string
+  plays: number
+  likes: number
+  followsGained: number | null
+  matched: number
+}
+
+/** 标题话题/高频词统计（喂给 LLM 的选题素材） */
+export interface TitleTagStat {
+  tag: string
+  count: number
+  avgPlays: number
+}
+
+export interface TitleAnalysis {
+  hashtags: TitleTagStat[]
+  topWords: TitleTagStat[]
 }
 
 /** 两期同名视频的涨跌对比（按标题精确匹配） */

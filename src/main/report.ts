@@ -139,9 +139,11 @@ function diagnosisHtml(diagnosis: DiagnosisResult | null): string {  if (!diagno
 }
 
 export function buildReportHtml(analysis: AnalysisResult, diagnosis: DiagnosisResult | null): string {
-  const { totals, deltas } = analysis
+  const { totals, deltas, increments } = analysis
+  const accountLabel = analysis.snapshot.account || '未命名账号'
+  const noteLabel = analysis.snapshot.note ? `（${esc(analysis.snapshot.note)}）` : ''
   const compareNote = analysis.compareSnapshot
-    ? `环比对象：${esc(analysis.compareSnapshot.fileName)}（${esc(fmtTime(analysis.compareSnapshot.importedAt))} 导入）`
+    ? `环比对象：${esc(analysis.compareSnapshot.note || analysis.compareSnapshot.fileName)}（${esc(fmtTime(analysis.compareSnapshot.importedAt))} 导入）`
     : '暂无上期数据可比'
 
   const trendLabels = analysis.trend.map((b) => b.label)
@@ -219,7 +221,7 @@ export function buildReportHtml(analysis: AnalysisResult, diagnosis: DiagnosisRe
   <div class="card">
     <h1>HotFlow 视频运营分析报告</h1>
     <div class="meta">
-      数据来源：${esc(analysis.snapshot.platformLabel)} · ${esc(analysis.snapshot.fileName)}（${analysis.snapshot.recordCount} 条视频）<br>
+      数据来源：${esc(analysis.snapshot.platformLabel)} · <b>${accountLabel}</b>${noteLabel} · ${esc(analysis.snapshot.fileName)}（${analysis.snapshot.recordCount} 条视频）<br>
       导入时间：${esc(fmtTime(analysis.snapshot.importedAt))} · 报告生成：${esc(fmtTime(analysis.generatedAt))}<br>
       ${compareNote}
     </div>
@@ -227,6 +229,13 @@ export function buildReportHtml(analysis: AnalysisResult, diagnosis: DiagnosisRe
 
   <div class="card">
     <h3>核心指标${deltas ? '' : '（暂无上期环比）'}</h3>
+    ${
+      increments
+        ? `<p class="insight" style="margin-bottom:14px">📌 净增口径（同名视频累计差求和）：本期净增播放 <b>${fmtNum(increments.plays)}</b>、净增点赞 <b>${fmtNum(increments.likes)}</b>${
+            increments.followsGained != null ? `、净增涨粉 <b>${fmtNum(increments.followsGained)}</b>` : ''
+          }（匹配 ${increments.matched} 条视频）。下方总量含历史存量，环比箭头反映累计口径。</p>`
+        : ''
+    }
     <div class="kpi-grid">
       ${kpiCard('总播放', fmtNum(totals.plays), deltas?.plays)}
       ${kpiCard('篇均播放', fmtNum(totals.avgPlays), deltas?.avgPlays)}

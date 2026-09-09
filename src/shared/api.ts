@@ -14,8 +14,8 @@ export interface Api {
   pickAndImport(platformId: string): Promise<ImportOutcome | null>
   /** 只读解析表格，返回列映射预检结果（不落库） */
   inspectTable(filePath: string, platformId: string): Promise<TableInspect>
-  /** 按路径导入（配合拖拽与预检确认） */
-  importFile(filePath: string, platformId: string): Promise<ImportOutcome>
+  /** 按路径导入（配合拖拽与预检确认），meta 携带账号名与周期备注 */
+  importFile(filePath: string, platformId: string, meta?: { account?: string; note?: string }): Promise<ImportOutcome>
   /** Electron 渲染层的 File 对象 → 磁盘绝对路径（拖拽导入用） */
   getPathForFile(file: File): string
   listSnapshots(): Promise<SnapshotMeta[]>

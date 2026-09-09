@@ -1,5 +1,5 @@
 import OpenAI from 'openai'
-import { engagementRateOf } from '@shared/metrics'
+import { analyzeTitles, engagementRateOf } from '@shared/metrics'
 import type { AnalysisResult, DiagnosisResult, LlmConfig, Snapshot, VideoRecord } from '@shared/types'
 
 const SYSTEM_PROMPT = `你是一名资深短视频运营专家，负责分析账号的视频数据并给出可执行的运营建议。
@@ -33,15 +33,21 @@ function compactRecord(r: VideoRecord) {
 }
 
 function buildUserPayload(snapshot: Snapshot, analysis: AnalysisResult): string {
+  const titles = analyzeTitles(snapshot.records)
   return JSON.stringify({
     平台: snapshot.platformLabel,
+    账号: snapshot.account || '未命名账号',
     数据文件: snapshot.fileName,
     视频总数: analysis.totals.videoCount,
-    整体指标: analysis.totals,
+    整体累计指标: analysis.totals,
+    本期净增_同名视频累计差求和: analysis.increments,
     与上期环比: analysis.deltas,
+    净增趋势_相邻两次导入之间: analysis.incrementTrend,
     发布趋势: analysis.trend,
     分时段表现: analysis.hourStats,
     时长表现: analysis.durationBuckets,
+    标题话题统计_含平均播放: titles.hashtags,
+    标题高频词_含平均播放: titles.topWords,
     播放量最高: analysis.topByPlays.slice(0, 8).map(compactRecord),
     播放量最低: analysis.bottomByPlays.slice(0, 8).map(compactRecord),
     互动率最高: analysis.topByEngagement.slice(0, 5).map(compactRecord)

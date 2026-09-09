@@ -2,10 +2,14 @@ import { describe, expect, it } from 'vitest'
 import {
   computeDeltas,
   computeHourStats,
+  computeIncrements,
+  computeIncrementTrend,
   computeTotals,
   computeTrend,
   computeVideoDiffs,
+  analyzeTitles,
   engagementRateOf,
+  findSuspicious,
   runAnalysis
 } from '../src/shared/metrics'
 import { matchColumns } from '../src/shared/normalize'
@@ -155,12 +159,120 @@ describe('computeVideoDiffs', () => {
     expect(result.down[0].title).toBe('爆款B')
     expect(result.down[0].playsDiff).toBe(-300)
   })
+  it('同名但发布日不同不误配（系列视频）', () => {
+    const result = computeVideoDiffs(
+      [rec({ title: '期末复习（上集）', publishTime: '2026-08-01 10:00:00', plays: 9000 })],
+      [rec({ title: '期末复习（上集）', publishTime: '2026-07-01 10:00:00', plays: 100 })]
+    )
+    expect(result.matched).toBe(0)
+    expect(result.up).toHaveLength(0)
+  })
+  it('同名同发布日正常匹配', () => {
+    const result = computeVideoDiffs(
+      [rec({ title: '爆款A', publishTime: '2026-08-01 10:00:00', plays: 2000 })],
+      [rec({ title: '爆款A', publishTime: '2026-08-01 10:00:00', plays: 1000 })]
+    )
+    expect(result.matched).toBe(1)
+    expect(result.up[0].playsDiff).toBe(1000)
+  })
   it('上期播放为 0 时百分比置空', () => {
     const result = computeVideoDiffs(
       [rec({ title: 'X', plays: 100 })],
       [rec({ title: 'X', plays: 0 })]
     )
     expect(result.up[0].playsDiffPercent).toBeNull()
+  })
+})
+
+describe('computeIncrements', () => {
+  it('净增口径 = 同名视频累计差求和', () => {
+    const cur = [
+      rec({ title: 'A', publishTime: '2026-08-01', plays: 3000, likes: 90, followsGained: 10 }),
+      rec({ title: 'B', publishTime: '2026-08-02', plays: 500 })
+    ]
+    const prev = [
+      rec({ title: 'A', publishTime: '2026-08-01', plays: 1000, likes: 30, followsGained: 4 }),
+      rec({ title: 'C', publishTime: '2026-08-02', plays: 5000 })
+    ]
+    const inc = computeIncrements(cur, prev)
+    expect(inc).not.toBeNull()
+    expect(inc.matched).toBe(1)
+    expect(inc.plays).toBe(2000)
+    expect(inc.likes).toBe(60)
+    expect(inc.followsGained).toBe(6)
+  })
+  it('无匹配时返回 null', () => {
+    expect(computeIncrements([rec({ title: 'X', plays: 1 })], [rec({ title: 'Y', plays: 1 })])).toBeNull()
+  })
+})
+
+describe('computeIncrementTrend', () => {
+  it('相邻快照序列生成净增点', () => {
+    const snap = (id: string, records: VideoRecord[]): Snapshot => ({
+      id,
+      platform: 'douyin',
+      platformLabel: '抖音',
+      account: '',
+      note: '',
+      fileName: `${id}.xlsx`,
+      importedAt: id,
+      recordCount: records.length,
+      warnings: [],
+      unmappedColumns: [],
+      records
+    })
+    const chain = [
+      snap('1', [rec({ title: 'A', publishTime: '2026-07-01', plays: 1000 })]),
+      snap('2', [rec({ title: 'A', publishTime: '2026-07-01', plays: 2500 })]),
+      snap('3', [rec({ title: 'A', publishTime: '2026-07-01', plays: 5000 })])
+    ]
+    const trend = computeIncrementTrend(chain)
+    expect(trend).toHaveLength(2)
+    expect(trend[0].plays).toBe(1500)
+    expect(trend[1].plays).toBe(2500)
+  })
+})
+
+describe('analyzeTitles', () => {
+  it('提取话题标签并计算平均播放', () => {
+    const analysis = analyzeTitles([
+      rec({ title: '宿舍开箱 #校园生活 #开箱', plays: 10000 }),
+      rec({ title: '食堂测评 #校园生活', plays: 20000 })
+    ])
+    const tag = analysis.hashtags.find((t) => t.tag === '校园生活')
+    expect(tag).toBeDefined()
+    expect(tag.count).toBe(2)
+    expect(tag.avgPlays).toBe(15000)
+    expect(analysis.hashtags.some((t) => t.tag === '开箱')).toBe(true)
+  })
+  it('高频词过滤停用词与单字', () => {
+    const analysis = analyzeTitles([
+      rec({ title: '期末复习日记', plays: 1000 }),
+      rec({ title: '期末复习vlog', plays: 1000 }),
+      rec({ title: '期末复习指南', plays: 1000 })
+    ])
+    const word = analysis.topWords.find((w) => w.tag === '期末复习')
+    expect(word).toBeDefined()
+    expect(word.count).toBe(3)
+    expect(analysis.topWords.every((w) => !['的', '了', '日记'].includes(w.tag))).toBe(true)
+  })
+})
+
+describe('findSuspicious', () => {
+  it('检测完播率超 100、播放 0 有点赞、点赞超播放', () => {
+    const issues = findSuspicious([
+      rec({ title: 'A', completionRate: 120 }),
+      rec({ title: 'B', plays: 0, likes: 10 }),
+      rec({ title: 'C', plays: 100, likes: 200 }),
+      rec({ title: 'D', plays: 100, likes: 10 })
+    ])
+    expect(issues).toHaveLength(3)
+    expect(issues[0]).toContain('A')
+    expect(issues[1]).toContain('B')
+    expect(issues[2]).toContain('C')
+  })
+  it('正常数据无警告', () => {
+    expect(findSuspicious([rec({ title: 'A', plays: 100, likes: 5, completionRate: 40 })])).toHaveLength(0)
   })
 })
 

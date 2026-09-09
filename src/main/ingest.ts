@@ -5,8 +5,16 @@ import Papa from 'papaparse'
 import { getPlatform } from '@shared/platforms'
 import { normalizeHeader } from '@shared/parse'
 import { mapRecords, matchColumns } from '@shared/normalize'
+import { findSuspicious } from '@shared/metrics'
 import { saveSnapshot } from './history'
 import type { Snapshot, TableInspect } from '@shared/types'
+
+export interface ImportMeta {
+  /** 账号名，多账号隔离用 */
+  account?: string
+  /** 周期备注 */
+  note?: string
+}
 
 /** exceljs 单元格值可能是富文本/公式/超链接对象，展平成原始值 */
 function cellValue(v: ExcelJS.CellValue): unknown {
@@ -106,14 +114,17 @@ export async function inspectTable(filePath: string, platformId: string): Promis
   }
 }
 
-export async function importFromFile(filePath: string, platformId: string): Promise<Snapshot> {
+export async function importFromFile(filePath: string, platformId: string, meta?: ImportMeta): Promise<Snapshot> {
   const platform = getPlatform(platformId)
   const table = await readTable(filePath)
   const { records, warnings, unmappedColumns } = mapRecords(table, platform)
+  warnings.push(...findSuspicious(records))
   const snapshot: Snapshot = {
     id: `${platform.id}-${Date.now()}`,
     platform: platform.id,
     platformLabel: platform.label,
+    account: (meta?.account ?? '').trim(),
+    note: (meta?.note ?? '').trim(),
     fileName: filePath.split(/[\\/]/).pop() ?? filePath,
     importedAt: new Date().toISOString(),
     recordCount: records.length,

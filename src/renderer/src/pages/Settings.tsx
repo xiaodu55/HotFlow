@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Alert, App, Button, Card, Form, Input, Select, Space, Typography } from 'antd'
 import { LLM_PRESETS, getPreset } from '@shared/llm-presets'
 import type { AppSettings, LlmProviderId } from '@shared/types'
+import PageHeader from '../components/PageHeader'
 
 interface Props {
   settings: AppSettings | null
@@ -57,7 +58,8 @@ export default function SettingsPage({ settings, onSaved }: Props) {
 
   return (
     <div style={{ maxWidth: 640, margin: '0 auto' }}>
-      <Card title="大模型配置">
+      <PageHeader title="设置" description="大模型接口配置，API Key 仅保存在本机" />
+      <Card>
         <Typography.Paragraph type="secondary">
           内容诊断与策略建议通过 OpenAI 兼容接口调用大模型。API Key 仅保存在本机用户数据目录，不会上传到任何服务器。
         </Typography.Paragraph>

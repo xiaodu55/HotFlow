@@ -4,7 +4,7 @@ import type { Api } from '@shared/api'
 const api: Api = {
   pickAndImport: (platformId) => ipcRenderer.invoke('app:pickAndImport', platformId),
   inspectTable: (filePath, platformId) => ipcRenderer.invoke('app:inspectTable', filePath, platformId),
-  importFile: (filePath, platformId) => ipcRenderer.invoke('app:importFile', filePath, platformId),
+  importFile: (filePath, platformId, meta) => ipcRenderer.invoke('app:importFile', filePath, platformId, meta),
   getPathForFile: (file) => webUtils.getPathForFile(file),
   listSnapshots: () => ipcRenderer.invoke('app:listSnapshots'),
   getSnapshot: (id) => ipcRenderer.invoke('app:getSnapshot', id),
