@@ -3,6 +3,7 @@ import type {
   AppSettings,
   DiagnosisResult,
   ImportOutcome,
+  LlmConfig,
   Snapshot,
   SnapshotMeta,
   TableInspect
@@ -25,7 +26,8 @@ export interface Api {
   runAnalysis(snapshotId: string, compareId?: string): Promise<AnalysisResult>
   getSettings(): Promise<AppSettings>
   saveSettings(settings: AppSettings): Promise<void>
-  testLlm(): Promise<{ ok: boolean; message: string }>
+  /** 用传入的配置测试连接（不落盘，避免覆盖已保存配置） */
+  testLlm(cfg: LlmConfig): Promise<{ ok: boolean; message: string }>
   /** 流式生成诊断，增量文本经 onLlmChunk 推送；完成后自动保存并返回完整结果 */
   runDiagnosis(snapshotId: string, compareId?: string): Promise<DiagnosisResult>
   /** 基于已生成的诊断继续追问，返回追加对话后的完整诊断 */

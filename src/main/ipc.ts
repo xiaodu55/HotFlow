@@ -1,7 +1,7 @@
 import { BrowserWindow, dialog, ipcMain } from 'electron'
 import { writeFile } from 'fs/promises'
 import { computeIncrementTrend, computeIncrements, runAnalysis } from '@shared/metrics'
-import type { AppSettings } from '@shared/types'
+import type { AppSettings, LlmConfig } from '@shared/types'
 import { importFromFile, inspectTable, type ImportMeta } from './ingest'
 import {
   deleteSnapshot,
@@ -77,10 +77,7 @@ export function registerIpc(): void {
 
   ipcMain.handle('app:getSettings', () => loadSettings())
   ipcMain.handle('app:saveSettings', (_e, settings: AppSettings) => saveSettings(settings))
-  ipcMain.handle('app:testLlm', async () => {
-    const settings = await loadSettings()
-    return testLlm(settings.llm)
-  })
+  ipcMain.handle('app:testLlm', async (_e, cfg: LlmConfig) => testLlm(cfg))
 
   ipcMain.handle('app:runDiagnosis', async (e, snapshotId: string, compareId?: string) => {
     const snapshot = await loadSnapshot(snapshotId)

@@ -47,8 +47,8 @@ export default function SettingsPage({ settings, onSaved }: Props) {
   async function test() {
     setTesting(true)
     try {
-      await window.api.saveSettings({ llm: { provider, baseURL: baseURL.trim(), apiKey: apiKey.trim(), model: model.trim() } })
-      const r = await window.api.testLlm()
+      // 只测当前表单值，不落盘——避免覆盖已保存的配置
+      const r = await window.api.testLlm({ provider, baseURL: baseURL.trim(), apiKey: apiKey.trim(), model: model.trim() })
       if (r.ok) message.success(r.message)
       else message.error(r.message)
     } finally {
