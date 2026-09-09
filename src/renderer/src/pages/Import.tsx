@@ -8,9 +8,12 @@ import { fmtTime } from '../utils'
 
 interface Props {
   snapshots: SnapshotMeta[]
+  currentId: string | null
   refresh: () => Promise<SnapshotMeta[]>
   onOpen: (id: string) => void
   onImported: (id: string) => void
+  /** 删除的可能是当前正在查看的快照，App 需要清空选中避免页面悬空 */
+  onDeleteCurrent: () => void
 }
 
 const PLATFORM_KEY = 'hotflow-platform'
@@ -27,7 +30,7 @@ function loadLastPlatform(): string {
   return PLATFORMS.some((p) => p.id === v) ? (v as string) : 'douyin'
 }
 
-export default function ImportPage({ snapshots, refresh, onOpen, onImported }: Props) {
+export default function ImportPage({ snapshots, currentId, refresh, onOpen, onImported, onDeleteCurrent }: Props) {
   const { message } = App.useApp()
   const [platform, setPlatformState] = useState<string>(loadLastPlatform)
   const [account, setAccount] = useState<string>(() => localStorage.getItem(`hotflow-account-${loadLastPlatform()}`) ?? '')
@@ -243,6 +246,7 @@ export default function ImportPage({ snapshots, refresh, onOpen, onImported }: P
                       title="确定删除这份数据？"
                       onConfirm={async () => {
                         await window.api.deleteSnapshot(record.id)
+                        if (record.id === currentId) onDeleteCurrent()
                         await refresh()
                         message.success('已删除')
                       }}

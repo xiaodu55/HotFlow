@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { App as AntApp, Button, ConfigProvider, Empty, Layout, Menu, Spin, Switch, Tooltip } from 'antd'
+import { Alert, App as AntApp, Button, ConfigProvider, Empty, Layout, Menu, Result, Spin, Switch, Tooltip } from 'antd'
 import {
   DatabaseOutlined,
   DashboardOutlined,
@@ -20,6 +20,7 @@ import {
   saveThemeMode,
   type ThemeMode
 } from './theme'
+import ErrorBoundary from './components/ErrorBoundary'
 import ImportPage from './pages/Import'
 import DashboardPage from './pages/Dashboard'
 import VideosPage from './pages/Videos'
@@ -39,6 +40,7 @@ const MENU_ITEMS = [
 ]
 
 export default function App() {
+  const { message } = AntApp.useApp()
   const [mode, setModeState] = useState<ThemeMode>(loadThemeMode)
   const [collapsed, setCollapsed] = useState(false)
   const [page, setPage] = useState<PageKey>('import')
@@ -47,12 +49,20 @@ export default function App() {
   const [compareId, setCompareId] = useState<string | undefined>(undefined)
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null)
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null)
+  const [analysisError, setAnalysisError] = useState<string | null>(null)
+  const [analysisReload, setAnalysisReload] = useState(0)
   const [diagnosis, setDiagnosis] = useState<DiagnosisResult | null>(null)
   const [settings, setSettings] = useState<AppSettings | null>(null)
 
   const setMode = useCallback((m: ThemeMode) => {
     setModeState(m)
     saveThemeMode(m)
+  }, [])
+
+  /** 统一的选择快照入口：切数据时清掉对比期，避免残留的 compareId 跨账号/跨平台 */
+  const selectSnapshot = useCallback((id: string) => {
+    setCurrentId(id)
+    setCompareId(undefined)
   }, [])
 
   const refreshSnapshots = useCallback(async () => {
@@ -73,7 +83,6 @@ export default function App() {
   useEffect(() => {
     if (!currentId) {
       setSnapshot(null)
-      setAnalysis(null)
       setDiagnosis(null)
       return
     }
@@ -86,32 +95,43 @@ export default function App() {
           setDiagnosis(r.diagnosis)
         }
       })
-      .catch(() => undefined)
+      .catch((err) => {
+        if (alive) message.error(`数据加载失败：${err instanceof Error ? err.message : String(err)}`)
+      })
     return () => {
       alive = false
     }
-  }, [currentId])
+  }, [currentId, message])
 
   useEffect(() => {
     if (!currentId) {
       setAnalysis(null)
+      setAnalysisError(null)
       return
     }
     let alive = true
     setAnalysis(null)
+    setAnalysisError(null)
     window.api
       .runAnalysis(currentId, compareId)
       .then((a) => {
         if (alive) setAnalysis(a)
       })
-      .catch(() => undefined)
+      .catch((err) => {
+        if (alive) {
+          const msg = err instanceof Error ? err.message : String(err)
+          setAnalysisError(msg)
+          message.error(`分析计算失败：${msg}`)
+        }
+      })
     return () => {
       alive = false
     }
-  }, [currentId, compareId])
+  }, [currentId, compareId, analysisReload, message])
 
   const needData = !currentId && page !== 'import' && page !== 'settings'
-  const analyzing = (page === 'dashboard' || page === 'videos') && currentId && !analysis
+  const analyzing =
+    (page === 'dashboard' || page === 'videos') && currentId && !analysis && !analysisError
 
   return (
     <ConfigProvider theme={getThemeConfig(mode)}>
@@ -160,6 +180,7 @@ export default function App() {
                 </Tooltip>
               </Layout.Header>
               <Layout.Content style={{ padding: '8px 20px 20px', overflow: 'auto', position: 'relative' }}>
+                <ErrorBoundary>
                 {needData ? (
                   <Empty style={{ marginTop: 120 }} description="还没有数据，先导入一份平台导出的表格吧">
                     <Button type="primary" onClick={() => setPage('import')}>
@@ -173,15 +194,17 @@ export default function App() {
                 ) : page === 'import' ? (
                   <ImportPage
                     snapshots={snapshots}
+                    currentId={currentId}
                     refresh={refreshSnapshots}
                     onOpen={(id) => {
-                      setCurrentId(id)
+                      selectSnapshot(id)
                       setPage('dashboard')
                     }}
                     onImported={(id) => {
-                      setCurrentId(id)
+                      selectSnapshot(id)
                       setPage('dashboard')
                     }}
+                    onDeleteCurrent={() => setCurrentId(null)}
                   />
                 ) : page === 'dashboard' ? (
                   <DashboardPage
@@ -206,6 +229,7 @@ export default function App() {
                 ) : (
                   <SettingsPage settings={settings} onSaved={setSettings} />
                 )}
+                </ErrorBoundary>
               </Layout.Content>
             </Layout>
           </Layout>
