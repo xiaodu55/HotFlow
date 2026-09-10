@@ -12,6 +12,7 @@ import {
   engagementRateOf,
   findSuspicious,
   gradeVideo,
+  matchKeyOf,
   runAnalysis
 } from '../src/shared/metrics'
 import { matchColumns } from '../src/shared/normalize'
@@ -262,6 +263,30 @@ describe('computeVideoDiffs', () => {
       [rec({ title: 'X', plays: 0 })]
     )
     expect(result.up[0].playsDiffPercent).toBeNull()
+  })
+})
+
+describe('matchKeyOf（跨期匹配键）', () => {
+  it('无发布时间时同名不同时长不误配', () => {
+    const r1 = rec({ title: '开学第一课', durationSec: 30, plays: 2000 })
+    const r2 = rec({ title: '开学第一课', durationSec: 600, plays: 1000 })
+    expect(computeVideoDiffs([r1], [r2]).matched).toBe(0)
+  })
+  it('无发布时间时同名同时长正常匹配', () => {
+    const r1 = rec({ title: '开学第一课', durationSec: 30, plays: 2000 })
+    const r2 = rec({ title: '开学第一课', durationSec: 30, plays: 1000 })
+    expect(computeVideoDiffs([r1], [r2]).matched).toBe(1)
+  })
+  it('标题全半角归一化后视为同一视频', () => {
+    expect(matchKeyOf(rec({ title: '期末复习（上）' }))).toBe(matchKeyOf(rec({ title: '期末复习(上)' })))
+    expect(matchKeyOf(rec({ title: 'ＡＢＣ指南', durationSec: 5 }))).toBe(
+      matchKeyOf(rec({ title: 'ABC指南', durationSec: 5 }))
+    )
+  })
+  it('有发布时间的键与无发布时间的键互不匹配', () => {
+    const withTime = rec({ title: '开学第一课', publishTime: '2026-09-01 10:00:00', durationSec: 30 })
+    const noTime = rec({ title: '开学第一课', durationSec: 30 })
+    expect(computeVideoDiffs([withTime], [noTime]).matched).toBe(0)
   })
 })
 

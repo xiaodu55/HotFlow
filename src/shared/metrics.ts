@@ -282,9 +282,14 @@ export function rankRecords(records: VideoRecord[]): {
   }
 }
 
-/** 视频身份复合键：同名但发布日不同视为不同视频，避免系列视频互配 */
+/**
+ * 视频身份复合键：同名但发布日不同视为不同视频，避免系列视频互配。
+ * 无发布时间的记录退化为「标题+时长」键——若只用标题，同名不同时长的视频会误配。
+ * 标题先经 NFKC 归一化（统一全半角字符）再比较。
+ */
 export function matchKeyOf(r: VideoRecord): string {
-  return `${r.title.trim()}|${r.publishTime ? r.publishTime.slice(0, 10) : ''}`
+  const title = r.title.normalize('NFKC').trim()
+  return r.publishTime ? `${title}|${r.publishTime.slice(0, 10)}` : `${title}|~${r.durationSec ?? ''}`
 }
 
 /** 本期净增：匹配到的同名同发布日视频，本期累计值 − 上期累计值 求和 */
