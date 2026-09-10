@@ -29,17 +29,35 @@ function createWindow(): void {
 
   // 防抖记录窗口位置与大小，下次启动恢复
   let saveTimer: NodeJS.Timeout | null = null
+  const currentWithBounds = (b: AppSettings['windowBounds']): AppSettings => {
+    const current = cachedSettings ?? { llm: { provider: 'deepseek' as const, baseURL: '', apiKey: '', model: '' } }
+    return { ...current, windowBounds: b }
+  }
   const rememberBounds = (): void => {
     if (saveTimer) clearTimeout(saveTimer)
     saveTimer = setTimeout(() => {
       if (win.isDestroyed() || win.isMinimized() || win.isMaximized()) return
-      const b = win.getBounds()
-      const current = cachedSettings ?? { llm: { provider: 'deepseek' as const, baseURL: '', apiKey: '', model: '' } }
-      void saveSettings({ ...current, windowBounds: b }).catch(() => undefined)
-    }, 800)
+      void saveSettings(currentWithBounds(win.getBounds())).catch(() => undefined)
+    }, 300)
   }
   win.on('resize', rememberBounds)
   win.on('move', rememberBounds)
+
+  // 退出兜底：防抖窗口内快速退出也能保住最后一次位置（拦截一次 close，落盘后 destroy）
+  let boundsFlushed = false
+  win.on('close', (e) => {
+    if (boundsFlushed || win.isDestroyed()) return
+    boundsFlushed = true
+    e.preventDefault()
+    // 最小化/最大化时 bounds 不可靠，沿用上次保存值（与防抖路径同一取舍：不持久化最大化状态）
+    const keepPrev = win.isMinimized() || win.isMaximized()
+    const next = keepPrev ? cachedSettings?.windowBounds ?? null : win.getBounds()
+    void saveSettings(currentWithBounds(next ?? undefined))
+      .catch(() => undefined)
+      .finally(() => {
+        if (!win.isDestroyed()) win.destroy()
+      })
+  })
 
   win.on('ready-to-show', () => win.show())
 
