@@ -15,7 +15,7 @@ import {
   matchKeyOf,
   runAnalysis
 } from '../src/shared/metrics'
-import { matchColumns } from '../src/shared/normalize'
+import { mapRecords, matchColumns } from '../src/shared/normalize'
 import { getPlatform } from '../src/shared/platforms'
 import type { Snapshot, VideoRecord } from '../src/shared/types'
 
@@ -149,6 +149,64 @@ describe('matchColumns', () => {
     expect(fieldColumns.likes).toBe('赞')
     expect(fieldColumns.comments).toBe('留言')
     expect(unmappedColumns).toEqual([])
+  })
+  it('B站稿件数据映射，弹幕/投币保留为未映射列', () => {
+    const { fieldColumns, unmappedColumns } = matchColumns(
+      ['稿件标题', '发布时间', '时长', '播放', '弹幕', '点赞', '投币', '收藏', '分享', '评论'],
+      getPlatform('bilibili')
+    )
+    expect(fieldColumns.title).toBe('稿件标题')
+    expect(fieldColumns.plays).toBe('播放')
+    expect(fieldColumns.likes).toBe('点赞')
+    expect(fieldColumns.comments).toBe('评论')
+    expect(unmappedColumns).toEqual(['弹幕', '投币'])
+  })
+  it('小红书笔记数据映射，观看量计为播放量', () => {
+    const { fieldColumns, unmappedColumns } = matchColumns(
+      ['笔记标题', '发布时间', '观看量', '点赞量', '收藏量', '评论量', '分享量', '新增粉丝数'],
+      getPlatform('xiaohongshu')
+    )
+    expect(fieldColumns.title).toBe('笔记标题')
+    expect(fieldColumns.plays).toBe('观看量')
+    expect(fieldColumns.followsGained).toBe('新增粉丝数')
+    expect(fieldColumns.likes).toBe('点赞量')
+    expect(unmappedColumns).toEqual([])
+  })
+  it('小红书数值格式解析（万单位 / 斜杠日期）', () => {
+    const { records, warnings } = mapRecords(
+      {
+        headers: ['笔记标题', '发布时间', '观看量', '点赞量', '收藏量', '评论量', '分享量', '新增粉丝数'],
+        rows: [
+          {
+            笔记标题: '开学第一课',
+            发布时间: '2026/9/1 20:00',
+            观看量: '1.2万',
+            点赞量: 800,
+            收藏量: 300,
+            评论量: 45,
+            分享量: 60,
+            新增粉丝数: 30
+          }
+        ]
+      },
+      getPlatform('xiaohongshu')
+    )
+    expect(warnings).toEqual([])
+    expect(records[0].title).toBe('开学第一课')
+    expect(records[0].plays).toBe(12000)
+    expect(records[0].likes).toBe(800)
+    expect(records[0].followsGained).toBe(30)
+    expect(records[0].publishTime).toBe('2026-09-01 20:00:00')
+  })
+  it('视频号作品数据映射，发表时间/转发列名', () => {
+    const { fieldColumns } = matchColumns(
+      ['作品标题', '发表时间', '时长', '播放', '点赞', '评论', '转发', '收藏'],
+      getPlatform('channels')
+    )
+    expect(fieldColumns.title).toBe('作品标题')
+    expect(fieldColumns.publishTime).toBe('发表时间')
+    expect(fieldColumns.shares).toBe('转发')
+    expect(fieldColumns.plays).toBe('播放')
   })
 })
 

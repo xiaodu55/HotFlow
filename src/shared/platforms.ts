@@ -67,12 +67,67 @@ const douyinColumns: Partial<Record<StandardField, string[]>> = {
   plays: ['播放量', '播放次数', '播放数', '播放']
 }
 
+const bilibiliColumns: Partial<Record<StandardField, string[]>> = {
+  title: ['稿件标题', '视频标题', '标题'],
+  publishTime: ['发布时间', '稿件发布时间'],
+  durationSec: ['时长', '视频时长', '稿件时长'],
+  followsGained: ['涨粉'],
+  collects: ['收藏'],
+  shares: ['分享'],
+  comments: ['评论'],
+  likes: ['点赞', '获赞'],
+  plays: ['播放']
+}
+
+const xiaohongshuColumns: Partial<Record<StandardField, string[]>> = {
+  title: ['笔记标题', '标题'],
+  publishTime: ['发布时间'],
+  durationSec: ['时长'],
+  followsGained: ['新增粉丝', '涨粉'],
+  collects: ['收藏'],
+  shares: ['分享'],
+  comments: ['评论', '留言'],
+  likes: ['点赞'],
+  plays: ['观看', '阅读', '播放']
+}
+
+const channelsColumns: Partial<Record<StandardField, string[]>> = {
+  title: ['作品标题', '视频标题', '标题'],
+  publishTime: ['发表时间', '发布时间'],
+  durationSec: ['时长', '视频时长'],
+  completionRate: ['完播'],
+  followsGained: ['涨粉', '新增关注'],
+  collects: ['收藏'],
+  shares: ['转发', '分享'],
+  comments: ['评论', '留言'],
+  likes: ['点赞', '喜欢'],
+  plays: ['播放']
+}
+
 export const PLATFORMS: PlatformDef[] = [
   {
     id: 'douyin',
     label: '抖音',
     description: '适配抖音创作者中心导出的作品数据表',
     columns: douyinColumns
+  },
+  {
+    id: 'bilibili',
+    label: 'B站（哔哩哔哩）',
+    description: '适配B站创作中心「稿件数据」导出；弹幕、投币等列暂不参与统计，会在导入时提示',
+    columns: bilibiliColumns
+  },
+  {
+    id: 'xiaohongshu',
+    label: '小红书',
+    description: '适配小红书创作者中心导出的笔记数据表；观看量/阅读量计为播放量',
+    columns: xiaohongshuColumns
+  },
+  {
+    id: 'channels',
+    label: '视频号（微信）',
+    description: '适配微信视频号助手导出的作品数据表',
+    columns: channelsColumns
   },
   {
     id: 'generic',
