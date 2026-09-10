@@ -59,4 +59,9 @@ describe('deltaTableHtml（两期对比明细表）', () => {
     expect(html).toContain('两期对比明细')
     expect(html).toContain('100.0%')
   })
+  it('图表库不可用时渲染占位提示而非空白', () => {
+    const html = buildReportHtml(runAnalysis(snap('p1', [rec({ plays: 10 })]), null), null)
+    expect(html).toContain('chart-fallback')
+    expect(html).toContain('联网后重新打开本报告')
+  })
 })

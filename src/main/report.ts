@@ -237,6 +237,7 @@ export function buildReportHtml(analysis: AnalysisResult, diagnosis: DiagnosisRe
   .delta.up { color: #16a34a; } .delta.down { color: #dc2626; } .delta.flat { color: #9ca3af; }
   .kpi-vs { color: #9ca3af; font-size: 11px; margin-left: 6px; }
   .chart { width: 100%; height: 340px; }
+  .chart-fallback { padding: 80px 20px; text-align: center; color: #9ca3af; background: #f8f9fc; border-radius: 8px; font-size: 13px; line-height: 1.8; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #eef0f4; }
   th { color: #6b7280; font-weight: 500; background: #f8f9fc; }
@@ -350,7 +351,9 @@ ${echartsTag}
 <script>
   function mk(id, option) {
     var el = document.getElementById(id);
-    if (el && window.echarts) echarts.init(el).setOption(option);
+    if (!el) return;
+    if (window.echarts) { echarts.init(el).setOption(option); return; }
+    el.innerHTML = '<div class="chart-fallback">📉 图表未能渲染：本报告未内嵌图表库，且当前设备无法访问 CDN。<br>联网后重新打开本报告即可显示图表。</div>';
   }
   var D = REPORT_DATA;
   if (D.trendLabels.length) {
