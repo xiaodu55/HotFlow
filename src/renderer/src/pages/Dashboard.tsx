@@ -11,7 +11,7 @@ import {
 } from '@ant-design/icons'
 import type { AnalysisResult, SnapshotMeta, StrategyReview, VideoDiff, VideoRecord } from '@shared/types'
 import type { EChartsOption } from 'echarts'
-import * as echarts from 'echarts'
+import type { LinearGradientObject } from 'echarts/core'
 import { engagementRateOf } from '@shared/metrics'
 import { METRIC_INFO } from '../metricsInfo'
 import { MetricTipByKey } from '../components/MetricTip'
@@ -50,12 +50,19 @@ interface Props {
   onCompareChange: (id: string | undefined) => void
 }
 
-/** 垂直渐变（柱/面积图用），from/to 为两位十六进制透明度 */
-function vGradient(color: string, from: string, to: string): echarts.graphic.LinearGradient {
-  return new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-    { offset: 0, color: color + from },
-    { offset: 1, color: color + to }
-  ])
+/** 垂直渐变（柱/面积图用），from/to 为两位十六进制透明度。用 option 式渐变对象，避免依赖全量 echarts 包 */
+function vGradient(color: string, from: string, to: string): LinearGradientObject {
+  return {
+    type: 'linear',
+    x: 0,
+    y: 0,
+    x2: 0,
+    y2: 1,
+    colorStops: [
+      { offset: 0, color: color + from },
+      { offset: 1, color: color + to }
+    ]
+  }
 }
 
 type NDatum = { value: number; n: number; itemStyle?: Record<string, unknown> }

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
-import * as echarts from 'echarts'
 import type { EChartsOption } from 'echarts'
+import echarts, { type ChartInstance } from '../echarts'
 import { ensureEchartsThemes, useTheme } from '../theme'
 
 interface Props {
@@ -10,7 +10,7 @@ interface Props {
 
 export default function Chart({ option, height = 320 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const chartRef = useRef<echarts.ECharts | null>(null)
+  const chartRef = useRef<ChartInstance | null>(null)
   const { mode } = useTheme()
   const themeName = mode === 'dark' ? 'hotflow-dark' : 'hotflow-light'
 

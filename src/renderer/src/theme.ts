@@ -1,7 +1,7 @@
 import { createContext, useContext } from 'react'
 import { theme as antdTheme } from 'antd'
 import type { ThemeConfig } from 'antd'
-import * as echarts from 'echarts'
+import echarts from './echarts'
 
 export type ThemeMode = 'dark' | 'light'
 
