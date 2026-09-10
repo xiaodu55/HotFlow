@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Alert, App, Button, Card, Descriptions, Empty, Input, List, Result, Space, Spin, Typography } from 'antd'
-import { RobotOutlined, SendOutlined, ThunderboltOutlined } from '@ant-design/icons'
+import { RobotOutlined, SendOutlined, ThunderboltOutlined, PlusOutlined } from '@ant-design/icons'
 import type { AppSettings, DiagnosisResult } from '@shared/types'
 import PageHeader from '../components/PageHeader'
 import type { PageKey } from '../App'
@@ -15,7 +15,7 @@ interface Props {
   compareId: string | undefined
 }
 
-function listBlock(title: string, items: string[], color: string): ReactNode {
+function listBlock(title: string, items: string[], color: string, onAdd?: (item: string) => void): ReactNode {
   if (items.length === 0) return null
   return (
     <Card size="small" title={<span style={{ color }}>{title}</span>} style={{ marginBottom: 16 }}>
@@ -23,7 +23,24 @@ function listBlock(title: string, items: string[], color: string): ReactNode {
         size="small"
         dataSource={items}
         renderItem={(item) => (
-          <List.Item style={{ padding: '6px 0' }}>
+          <List.Item
+            style={{ padding: '6px 0' }}
+            actions={
+              onAdd
+                ? [
+                    <Button
+                      key="topic"
+                      type="link"
+                      size="small"
+                      icon={<PlusOutlined />}
+                      onClick={() => onAdd(item)}
+                    >
+                      加入选题库
+                    </Button>
+                  ]
+                : undefined
+            }
+          >
             <Typography.Text style={{ whiteSpace: 'pre-wrap' }}>{item}</Typography.Text>
           </List.Item>
         )}
@@ -50,6 +67,13 @@ export default function DiagnosisPage({
   )
 
   useEffect(() => window.api.onLlmChunk((text) => setStreamText((prev) => prev + text)), [])
+
+  function addTopicToLibrary(item: string) {
+    void window.api
+      .addTopic(item, 'ai')
+      .then(() => message.success('已加入选题库'))
+      .catch(() => message.error('加入选题库失败'))
+  }
 
   async function run() {
     if (!currentId) return
@@ -183,8 +207,8 @@ export default function DiagnosisPage({
                   </Card>
                 )}
                 {listBlock('发布时间建议', diagnosis.advicePublishTime, '#22d3ee')}
-                {listBlock('选题方向建议', diagnosis.adviceTopics, '#22d3ee')}
-                {listBlock('行动清单', diagnosis.adviceActions, '#fbbf24')}
+                {listBlock('选题方向建议', diagnosis.adviceTopics, '#22d3ee', addTopicToLibrary)}
+                {listBlock('行动清单', diagnosis.adviceActions, '#fbbf24', addTopicToLibrary)}
               </>
             )}
             <Descriptions size="small" column={1}>

@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { Alert, App as AntApp, Button, ConfigProvider, Empty, Layout, Menu, Result, Spin, Switch, Tooltip } from 'antd'
 import {
+  BulbOutlined,
   DatabaseOutlined,
   DashboardOutlined,
   FileTextOutlined,
@@ -27,15 +28,17 @@ const ImportPage = lazy(() => import('./pages/Import'))
 const DashboardPage = lazy(() => import('./pages/Dashboard'))
 const VideosPage = lazy(() => import('./pages/Videos'))
 const DiagnosisPage = lazy(() => import('./pages/Diagnosis'))
+const TopicsPage = lazy(() => import('./pages/Topics'))
 const ReportPage = lazy(() => import('./pages/Report'))
 const SettingsPage = lazy(() => import('./pages/Settings'))
 
-export type PageKey = 'import' | 'dashboard' | 'videos' | 'diagnosis' | 'report' | 'settings'
+export type PageKey = 'import' | 'dashboard' | 'videos' | 'topics' | 'diagnosis' | 'report' | 'settings'
 
 const MENU_ITEMS = [
   { key: 'import', icon: <DatabaseOutlined />, label: '导入数据' },
   { key: 'dashboard', icon: <DashboardOutlined />, label: '数据看板' },
   { key: 'videos', icon: <TableOutlined />, label: '视频明细' },
+  { key: 'topics', icon: <BulbOutlined />, label: '选题库' },
   { key: 'diagnosis', icon: <RobotOutlined />, label: 'AI 诊断' },
   { key: 'report', icon: <FileTextOutlined />, label: '分析报告' },
   { type: 'group' as const, label: '系统', children: [{ key: 'settings', icon: <SettingOutlined />, label: '设置' }] }
@@ -131,7 +134,7 @@ export default function App() {
     }
   }, [currentId, compareId, analysisReload, message])
 
-  const needData = !currentId && page !== 'import' && page !== 'settings'
+  const needData = !currentId && page !== 'import' && page !== 'settings' && page !== 'topics'
   const analyzing =
     (page === 'dashboard' || page === 'videos') && currentId && !analysis && !analysisError
 
@@ -225,6 +228,8 @@ export default function App() {
                   />
                 ) : page === 'videos' ? (
                   <VideosPage snapshot={snapshot} analysis={analysis} />
+                ) : page === 'topics' ? (
+                  <TopicsPage />
                 ) : page === 'diagnosis' ? (
                   <DiagnosisPage
                     currentId={currentId}
