@@ -73,7 +73,8 @@ export default function VideosPage({ snapshot, analysis }: Props) {
     URL.revokeObjectURL(url)
   }
 
-  const columns = [
+  // columns 引用 grades（analysis），memo 化避免每次渲染重建
+  const columns = useMemo(() => [
     {
       title: '标题',
       dataIndex: 'title',
@@ -169,7 +170,7 @@ export default function VideosPage({ snapshot, analysis }: Props) {
       sorter: (a: VideoRecord, b: VideoRecord) => a.collects - b.collects,
       render: fmtNum
     }
-  ]
+  ], [analysis])
 
   return (
     <div>

@@ -189,6 +189,156 @@ function DiffList({
   )
 }
 
+function buildTrendOption(analysis: AnalysisResult): EChartsOption {
+  return {
+    tooltip: { trigger: 'axis' },
+    legend: { top: 0, data: ['播放量', '互动率'] },
+    grid: { left: 8, right: 8, top: 48, bottom: 4, containLabel: true },
+    xAxis: { type: 'category', data: analysis.trend.map((b) => b.label), axisLabel: { fontSize: 11 } },
+    yAxis: [
+      { type: 'value' },
+      { type: 'value', axisLabel: { formatter: '{value}%' } }
+    ],
+    series: [
+      {
+        name: '播放量',
+        type: 'line',
+        smooth: true,
+        data: analysis.trend.map((b) => b.plays),
+        itemStyle: { color: '#22d3ee' },
+        lineStyle: { width: 2.5 },
+        areaStyle: { color: vGradient('#22d3ee', '55', '05') }
+      },
+      {
+        name: '互动率',
+        type: 'line',
+        smooth: true,
+        yAxisIndex: 1,
+        data: analysis.trend.map((b) => b.engagementRate),
+        itemStyle: { color: '#e879f9' },
+        lineStyle: { width: 2 }
+      }
+    ]
+  }
+}
+
+function buildHourOption(analysis: AnalysisResult): EChartsOption {
+  return {
+    tooltip: tooltipWithSampleN(),
+    legend: { top: 0, data: ['篇均播放', '互动率'] },
+    grid: { left: 8, right: 8, top: 48, bottom: 4, containLabel: true },
+    xAxis: { type: 'category', data: analysis.hourStats.map((h) => h.label), axisLabel: { interval: 0, fontSize: 11 } },
+    yAxis: [
+      { type: 'value' },
+      { type: 'value', axisLabel: { formatter: '{value}%' } }
+    ],
+    series: [
+      {
+        name: '篇均播放',
+        type: 'bar',
+        data: analysis.hourStats.map((h) => barDatum(h.avgPlays, h.videoCount, '#22d3ee')),
+        barMaxWidth: 26
+      },
+      {
+        name: '互动率',
+        type: 'line',
+        yAxisIndex: 1,
+        data: analysis.hourStats.map((h) => h.avgEngagementRate),
+        itemStyle: { color: '#818cf8' },
+        lineStyle: { width: 2 }
+      }
+    ]
+  }
+}
+
+function buildDurationOption(analysis: AnalysisResult): EChartsOption {
+  return {
+    tooltip: tooltipWithSampleN(),
+    legend: { top: 0, data: ['平均完播率', '篇均播放'] },
+    grid: { left: 8, right: 8, top: 48, bottom: 4, containLabel: true },
+    xAxis: { type: 'category', data: analysis.durationBuckets.map((d) => d.label), axisLabel: { interval: 0, fontSize: 11 } },
+    yAxis: [
+      { type: 'value', axisLabel: { formatter: '{value}%' } },
+      { type: 'value' }
+    ],
+    series: [
+      {
+        name: '平均完播率',
+        type: 'bar',
+        data: analysis.durationBuckets.map((d) => barDatum(d.avgCompletionRate, d.videoCount, '#34d399')),
+        barMaxWidth: 26
+      },
+      {
+        name: '篇均播放',
+        type: 'bar',
+        yAxisIndex: 1,
+        data: analysis.durationBuckets.map((d) => barDatum(d.avgPlays, d.videoCount, '#a5b4fc')),
+        barMaxWidth: 26
+      }
+    ]
+  }
+}
+
+function buildIncrementOption(analysis: AnalysisResult): EChartsOption {
+  return {
+    tooltip: { trigger: 'axis' },
+    legend: { top: 0, data: ['净增播放', '净增涨粉'] },
+    grid: { left: 8, right: 8, top: 48, bottom: 4, containLabel: true },
+    xAxis: { type: 'category', data: analysis.incrementTrend.map((p) => p.label), axisLabel: { interval: 0, fontSize: 11 } },
+    yAxis: [
+      { type: 'value' },
+      { type: 'value' }
+    ],
+    series: [
+      {
+        name: '净增播放',
+        type: 'bar',
+        data: analysis.incrementTrend.map((p) => p.plays),
+        itemStyle: { borderRadius: [5, 5, 0, 0], color: vGradient('#22d3ee', 'aa', '22') },
+        barMaxWidth: 30
+      },
+      {
+        name: '净增涨粉',
+        type: 'line',
+        yAxisIndex: 1,
+        data: analysis.incrementTrend.map((p) => p.followsGained),
+        itemStyle: { color: '#34d399' },
+        lineStyle: { width: 2 }
+      }
+    ]
+  }
+}
+
+type KpiItem = {
+  label: string
+  value: number
+  key: string
+  fmt: (n: number) => string
+  suffix?: string
+  tipKey: keyof typeof METRIC_INFO
+}
+
+function buildKpis(analysis: AnalysisResult): KpiItem[] {
+  const { totals } = analysis
+  return [
+    { label: '视频总数', value: totals.videoCount, key: 'videoCount', fmt: fmtNum, suffix: '条', tipKey: 'videoCount' },
+    { label: '总播放', value: totals.plays, key: 'plays', fmt: fmtNum, tipKey: 'plays' },
+    { label: '篇均播放', value: totals.avgPlays, key: 'avgPlays', fmt: fmtNum, tipKey: 'avgPlays' },
+    { label: '中位数播放', value: totals.medianPlays, key: 'medianPlays', fmt: fmtNum, tipKey: 'medianPlays' },
+    { label: '互动率', value: totals.engagementRate, key: 'engagementRate', fmt: fmtPct, tipKey: 'engagementRate' },
+    ...(totals.completionRate != null
+      ? [{ label: '平均完播率', value: totals.completionRate, key: 'completionRate', fmt: fmtPct, tipKey: 'completionRate' as const }]
+      : []),
+    ...(totals.followsGained != null
+      ? [{ label: '涨粉', value: totals.followsGained, key: 'followsGained', fmt: fmtNum, tipKey: 'followsGained' as const }]
+      : []),
+    { label: '总点赞', value: totals.likes, key: 'likes', fmt: fmtNum, tipKey: 'likes' },
+    { label: '总评论', value: totals.comments, key: 'comments', fmt: fmtNum, tipKey: 'comments' },
+    { label: '总分享', value: totals.shares, key: 'shares', fmt: fmtNum, tipKey: 'shares' },
+    { label: '总收藏', value: totals.collects, key: 'collects', fmt: fmtNum, tipKey: 'collects' }
+  ]
+}
+
 export default function DashboardPage({ analysis, snapshots, compareId, onCompareChange }: Props) {
   const [rankDim, setRankDim] = useState<'plays' | 'engagement'>('plays')
   const [guideVisible, setGuideVisible] = useState(() => localStorage.getItem('hotflow-guide-seen') !== '1')
@@ -226,6 +376,21 @@ export default function DashboardPage({ analysis, snapshots, compareId, onCompar
       .map((s) => ({ value: s.id, label: `${s.note || s.fileName}（${fmtTime(s.importedAt)}）` }))
   }, [analysis, snapshots])
 
+  // 图表配置与 KPI 只随 analysis 变化；否则任意 setState（切排名、关提示）都会让全部图表 notMerge 重绘
+  const charts = useMemo(
+    () =>
+      analysis
+        ? {
+            trendOption: buildTrendOption(analysis),
+            hourOption: buildHourOption(analysis),
+            durationOption: buildDurationOption(analysis),
+            incrementOption: buildIncrementOption(analysis),
+            kpis: buildKpis(analysis)
+          }
+        : null,
+    [analysis]
+  )
+
   function exportDiffs(items: VideoDiff[], name: string) {
     const header = ['标题', '上期播放', '本期播放', '播放差值', '播放幅度(%)', '本期互动率(%)', '上期互动率(%)']
     const esc = (v: string | number | null): string => {
@@ -247,144 +412,15 @@ export default function DashboardPage({ analysis, snapshots, compareId, onCompar
     URL.revokeObjectURL(url)
   }
 
-  if (!analysis) return null
+  if (!analysis || !charts) return null
   const { totals, increments } = analysis
+  const { trendOption, hourOption, durationOption, incrementOption, kpis } = charts
   const hasCompare = Boolean(analysis.compareSnapshot)
 
   const rankData =
     rankDim === 'plays'
       ? { top: analysis.topByPlays, bottom: analysis.bottomByPlays }
       : { top: analysis.topByEngagement, bottom: analysis.bottomByEngagement }
-
-  const trendOption: EChartsOption = {
-    tooltip: { trigger: 'axis' },
-    legend: { top: 0, data: ['播放量', '互动率'] },
-    grid: { left: 8, right: 8, top: 48, bottom: 4, containLabel: true },
-    xAxis: { type: 'category', data: analysis.trend.map((b) => b.label), axisLabel: { fontSize: 11 } },
-    yAxis: [
-      { type: 'value' },
-      { type: 'value', axisLabel: { formatter: '{value}%' } }
-    ],
-    series: [
-      {
-        name: '播放量',
-        type: 'line',
-        smooth: true,
-        data: analysis.trend.map((b) => b.plays),
-        itemStyle: { color: '#22d3ee' },
-        lineStyle: { width: 2.5 },
-        areaStyle: { color: vGradient('#22d3ee', '55', '05') }
-      },
-      {
-        name: '互动率',
-        type: 'line',
-        smooth: true,
-        yAxisIndex: 1,
-        data: analysis.trend.map((b) => b.engagementRate),
-        itemStyle: { color: '#e879f9' },
-        lineStyle: { width: 2 }
-      }
-    ]
-  }
-
-  const hourOption: EChartsOption = {
-    tooltip: tooltipWithSampleN(),
-    legend: { top: 0, data: ['篇均播放', '互动率'] },
-    grid: { left: 8, right: 8, top: 48, bottom: 4, containLabel: true },
-    xAxis: { type: 'category', data: analysis.hourStats.map((h) => h.label), axisLabel: { interval: 0, fontSize: 11 } },
-    yAxis: [
-      { type: 'value' },
-      { type: 'value', axisLabel: { formatter: '{value}%' } }
-    ],
-    series: [
-      {
-        name: '篇均播放',
-        type: 'bar',
-        data: analysis.hourStats.map((h) => barDatum(h.avgPlays, h.videoCount, '#22d3ee')),
-        barMaxWidth: 26
-      },
-      {
-        name: '互动率',
-        type: 'line',
-        yAxisIndex: 1,
-        data: analysis.hourStats.map((h) => h.avgEngagementRate),
-        itemStyle: { color: '#818cf8' },
-        lineStyle: { width: 2 }
-      }
-    ]
-  }
-
-  const durationOption: EChartsOption = {
-    tooltip: tooltipWithSampleN(),
-    legend: { top: 0, data: ['平均完播率', '篇均播放'] },
-    grid: { left: 8, right: 8, top: 48, bottom: 4, containLabel: true },
-    xAxis: { type: 'category', data: analysis.durationBuckets.map((d) => d.label), axisLabel: { interval: 0, fontSize: 11 } },
-    yAxis: [
-      { type: 'value', axisLabel: { formatter: '{value}%' } },
-      { type: 'value' }
-    ],
-    series: [
-      {
-        name: '平均完播率',
-        type: 'bar',
-        data: analysis.durationBuckets.map((d) => barDatum(d.avgCompletionRate, d.videoCount, '#34d399')),
-        barMaxWidth: 26
-      },
-      {
-        name: '篇均播放',
-        type: 'bar',
-        yAxisIndex: 1,
-        data: analysis.durationBuckets.map((d) => barDatum(d.avgPlays, d.videoCount, '#a5b4fc')),
-        barMaxWidth: 26
-      }
-    ]
-  }
-
-  const incrementOption: EChartsOption = {
-    tooltip: { trigger: 'axis' },
-    legend: { top: 0, data: ['净增播放', '净增涨粉'] },
-    grid: { left: 8, right: 8, top: 48, bottom: 4, containLabel: true },
-    xAxis: { type: 'category', data: analysis.incrementTrend.map((p) => p.label), axisLabel: { interval: 0, fontSize: 11 } },
-    yAxis: [
-      { type: 'value' },
-      { type: 'value' }
-    ],
-    series: [
-      {
-        name: '净增播放',
-        type: 'bar',
-        data: analysis.incrementTrend.map((p) => p.plays),
-        itemStyle: { borderRadius: [5, 5, 0, 0], color: vGradient('#22d3ee', 'aa', '22') },
-        barMaxWidth: 30
-      },
-      {
-        name: '净增涨粉',
-        type: 'line',
-        yAxisIndex: 1,
-        data: analysis.incrementTrend.map((p) => p.followsGained),
-        itemStyle: { color: '#34d399' },
-        lineStyle: { width: 2 }
-      }
-    ]
-  }
-
-  const kpis: Array<{ label: string; value: number; key: string; fmt: (n: number) => string; suffix?: string; tipKey: keyof typeof METRIC_INFO }> = [
-    { label: '视频总数', value: totals.videoCount, key: 'videoCount', fmt: fmtNum, suffix: '条', tipKey: 'videoCount' },
-    { label: '总播放', value: totals.plays, key: 'plays', fmt: fmtNum, tipKey: 'plays' },
-    { label: '篇均播放', value: totals.avgPlays, key: 'avgPlays', fmt: fmtNum, tipKey: 'avgPlays' },
-    { label: '中位数播放', value: totals.medianPlays, key: 'medianPlays', fmt: fmtNum, tipKey: 'medianPlays' },
-    { label: '互动率', value: totals.engagementRate, key: 'engagementRate', fmt: fmtPct, tipKey: 'engagementRate' },
-    ...(totals.completionRate != null
-      ? [{ label: '平均完播率', value: totals.completionRate, key: 'completionRate', fmt: fmtPct, tipKey: 'completionRate' as const }]
-      : []),
-    ...(totals.followsGained != null
-      ? [{ label: '涨粉', value: totals.followsGained, key: 'followsGained', fmt: fmtNum, tipKey: 'followsGained' as const }]
-      : []),
-    { label: '总点赞', value: totals.likes, key: 'likes', fmt: fmtNum, tipKey: 'likes' },
-    { label: '总评论', value: totals.comments, key: 'comments', fmt: fmtNum, tipKey: 'comments' },
-    { label: '总分享', value: totals.shares, key: 'shares', fmt: fmtNum, tipKey: 'shares' },
-    { label: '总收藏', value: totals.collects, key: 'collects', fmt: fmtNum, tipKey: 'collects' }
-  ]
 
   return (
     <div style={{ maxWidth: 1240, margin: '0 auto' }}>
