@@ -1,8 +1,9 @@
 import { app, safeStorage } from 'electron'
 import { join } from 'path'
-import { readFile, writeFile } from 'fs/promises'
+import { readFile } from 'fs/promises'
 import { DEFAULT_LLM_CONFIG } from '@shared/llm-presets'
 import { logWarn } from './logger'
+import { writeFileAtomic } from './atomic'
 import type { AppSettings, LlmConfig } from '@shared/types'
 
 function settingsFile(): string {
@@ -61,5 +62,5 @@ export async function saveSettings(settings: AppSettings): Promise<void> {
     // 加密失败时保留明文回退，可用性优先
     logWarn('settings:encryptApiKey', err)
   }
-  await writeFile(settingsFile(), JSON.stringify(persisted, null, 2), 'utf-8')
+  await writeFileAtomic(settingsFile(), JSON.stringify(persisted, null, 2))
 }

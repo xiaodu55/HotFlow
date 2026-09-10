@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -92,6 +92,17 @@ describe('history 快照存储（meta 索引）', () => {
     await writeFile(join(hist(), 'a.diagnosis.json'), '{}', 'utf-8')
     await deleteSnapshot('a')
     expect(await listSnapshots()).toHaveLength(0)
+  })
+
+  it('覆盖保存后内容完整且无 .tmp 残留（原子写）', async () => {
+    await saveSnapshot(snap('a', [rec({ plays: 1 })]))
+    await saveSnapshot(snap('a', [rec({ plays: 2 })]))
+    const metas = await listSnapshots()
+    expect(metas).toHaveLength(1)
+    const raw = JSON.parse(await readFile(join(hist(), 'a.json'), 'utf-8'))
+    expect(raw.records[0].plays).toBe(2)
+    const files = await readdir(hist())
+    expect(files.filter((f) => f.endsWith('.tmp'))).toEqual([])
   })
 
   it('损坏的快照文件不影响整体列表', async () => {

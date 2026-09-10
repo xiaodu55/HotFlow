@@ -1,7 +1,8 @@
-import { unlink, readdir, readFile, writeFile } from 'fs/promises'
+import { unlink, readdir, readFile } from 'fs/promises'
 import { join } from 'path'
 import { ensureHistoryDir, historyDir } from './paths'
 import { logWarn } from './logger'
+import { writeFileAtomic } from './atomic'
 import type { DiagnosisResult, Snapshot, SnapshotMeta } from '@shared/types'
 
 function snapshotFile(id: string): string {
@@ -22,8 +23,8 @@ export async function saveSnapshot(snapshot: Snapshot): Promise<void> {
   void _records
   // meta 文件是派生数据：列表/环比基线查找只需 meta，免去全量快照解析
   await Promise.all([
-    writeFile(snapshotFile(snapshot.id), JSON.stringify(snapshot), 'utf-8'),
-    writeFile(metaFile(snapshot.id), JSON.stringify(meta), 'utf-8')
+    writeFileAtomic(snapshotFile(snapshot.id), JSON.stringify(snapshot)),
+    writeFileAtomic(metaFile(snapshot.id), JSON.stringify(meta))
   ])
 }
 
@@ -67,7 +68,7 @@ export async function deleteSnapshot(id: string): Promise<void> {
 
 export async function saveDiagnosis(id: string, diagnosis: DiagnosisResult): Promise<void> {
   await ensureHistoryDir()
-  await writeFile(diagnosisFile(id), JSON.stringify(diagnosis), 'utf-8')
+  await writeFileAtomic(diagnosisFile(id), JSON.stringify(diagnosis))
 }
 
 const ARCHIVE_CAP = 10
@@ -91,7 +92,7 @@ export async function archiveDiagnosis(id: string, diagnosis: DiagnosisResult): 
     list = []
   }
   list.unshift(diagnosis)
-  await writeFile(diagnosisArchiveFile(id), JSON.stringify(list.slice(0, ARCHIVE_CAP)), 'utf-8')
+  await writeFileAtomic(diagnosisArchiveFile(id), JSON.stringify(list.slice(0, ARCHIVE_CAP)))
 }
 
 /** 诊断归档（按时间倒序，[0] 为最近被接替的一份） */
