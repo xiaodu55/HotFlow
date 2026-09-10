@@ -159,6 +159,13 @@ function bucketKey(d: Date, granularity: 'day' | 'week' | 'month'): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
+/** 日期键（YYYY-MM-DD）加 N 天，本地时区构造避免 UTC 解析偏移 */
+function addDays(dateKey: string, days: number): string {
+  const [y, m, d] = dateKey.split('-').map(Number)
+  const dt = new Date(y, m - 1, d + days)
+  return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`
+}
+
 function bucketLabel(key: string, granularity: 'day' | 'week' | 'month'): string {
   if (granularity === 'month') return key
   if (granularity === 'week') {
@@ -197,7 +204,7 @@ export function computeTrend(records: VideoRecord[]): {
       return {
         label: bucketLabel(key, granularity),
         start: key,
-        end: key,
+        end: granularity === 'week' ? addDays(key, 6) : key,
         videoCount: totals.videoCount,
         plays: totals.plays,
         engagementRate: totals.engagementRate,

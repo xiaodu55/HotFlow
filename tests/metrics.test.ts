@@ -100,6 +100,15 @@ describe('computeTrend', () => {
     expect(granularity).toBe('month')
     expect(buckets.map((b) => b.label)).toEqual(['2026-01', '2026-06'])
   })
+  it('周桶 end 为 start+6 天（2026-08-03 是周一）', () => {
+    const { granularity, buckets } = computeTrend([
+      rec({ publishTime: '2026-08-03 10:00:00', plays: 100 }),
+      rec({ publishTime: '2026-10-20 10:00:00', plays: 100 })
+    ])
+    expect(granularity).toBe('week')
+    const week = buckets.find((b) => b.start === '2026-08-03')
+    expect(week?.end).toBe('2026-08-09')
+  })
 })
 
 describe('computeHourStats', () => {
