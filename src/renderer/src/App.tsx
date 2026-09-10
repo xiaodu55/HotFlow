@@ -226,9 +226,9 @@ export default function App() {
                   />
                 ) : page === 'report' ? (
                   <ReportPage currentId={currentId} compareId={compareId} />
-                ) : (
-                  <SettingsPage settings={settings} onSaved={setSettings} />
-                )}
+                  ) : (
+                    <SettingsPage settings={settings} onSaved={setSettings} onSnapshotsChanged={refreshSnapshots} />
+                  )}
                 </ErrorBoundary>
               </Layout.Content>
             </Layout>

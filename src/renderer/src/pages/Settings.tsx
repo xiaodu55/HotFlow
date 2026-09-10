@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Alert, App, Button, Card, Form, Input, Select, Space, Typography } from 'antd'
+import { CloudDownloadOutlined, CloudUploadOutlined } from '@ant-design/icons'
 import { LLM_PRESETS, getPreset } from '@shared/llm-presets'
 import type { AppSettings, LlmProviderId } from '@shared/types'
 import PageHeader from '../components/PageHeader'
@@ -7,9 +8,11 @@ import PageHeader from '../components/PageHeader'
 interface Props {
   settings: AppSettings | null
   onSaved: (s: AppSettings) => void
+  /** 备份导入后刷新快照列表 */
+  onSnapshotsChanged: () => Promise<unknown>
 }
 
-export default function SettingsPage({ settings, onSaved }: Props) {
+export default function SettingsPage({ settings, onSaved, onSnapshotsChanged }: Props) {
   const { message } = App.useApp()
   const [provider, setProvider] = useState<LlmProviderId>(settings?.llm.provider ?? 'deepseek')
   const [baseURL, setBaseURL] = useState(settings?.llm.baseURL ?? getPreset('deepseek').baseURL)
@@ -17,6 +20,7 @@ export default function SettingsPage({ settings, onSaved }: Props) {
   const [model, setModel] = useState(settings?.llm.model ?? getPreset('deepseek').defaultModel)
   const [testing, setTesting] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [backuping, setBackuping] = useState<'export' | 'import' | null>(null)
 
   const preset = getPreset(provider)
 
@@ -53,6 +57,33 @@ export default function SettingsPage({ settings, onSaved }: Props) {
       else message.error(r.message)
     } finally {
       setTesting(false)
+    }
+  }
+
+  async function exportBackup() {
+    setBackuping('export')
+    try {
+      const r = await window.api.exportBackup()
+      if (!r.canceled && r.path) message.success(`已导出 ${r.snapshots} 份快照：${r.path}`)
+    } catch (err) {
+      message.error(`导出失败：${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setBackuping(null)
+    }
+  }
+
+  async function importBackup() {
+    setBackuping('import')
+    try {
+      const r = await window.api.importBackup()
+      if (!r.canceled) {
+        await onSnapshotsChanged()
+        message.success(`已恢复 ${r.snapshots ?? 0} 份快照${r.settings ? '（含大模型设置）' : ''}`)
+      }
+    } catch (err) {
+      message.error(`导入失败：${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setBackuping(null)
     }
   }
 
@@ -107,6 +138,26 @@ export default function SettingsPage({ settings, onSaved }: Props) {
         message="没有 API Key？"
         description="智谱的 glm-4-flash 模型免费，注册即可使用；DeepSeek 价格也很低（百万 token 约几元），适合这种数据分析场景。"
       />
+
+      <Card title="数据管理" style={{ marginTop: 16 }}>
+        <Typography.Paragraph type="secondary">
+          所有导入的快照和大模型配置只保存在本机。定期导出备份文件（单个 JSON，含全部快照与设置），
+          重装系统或换电脑时可通过「导入备份」完整恢复。
+        </Typography.Paragraph>
+        <Space>
+          <Button
+            type="primary"
+            icon={<CloudDownloadOutlined />}
+            loading={backuping === 'export'}
+            onClick={exportBackup}
+          >
+            导出全部数据
+          </Button>
+          <Button icon={<CloudUploadOutlined />} loading={backuping === 'import'} onClick={importBackup}>
+            导入备份
+          </Button>
+        </Space>
+      </Card>
     </div>
   )
 }

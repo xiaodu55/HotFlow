@@ -1,7 +1,8 @@
 import { BrowserWindow, dialog, ipcMain } from 'electron'
-import { writeFile } from 'fs/promises'
+import { readFile, writeFile } from 'fs/promises'
 import { computeIncrementTrend, computeIncrements, runAnalysis } from '@shared/metrics'
 import type { AppSettings, LlmConfig } from '@shared/types'
+import { createBackup, restoreBackup } from './backup'
 import { importFromFile, inspectTable, type ImportMeta } from './ingest'
 import {
   deleteSnapshot,
@@ -114,7 +115,7 @@ export function registerIpc(): void {
   ipcMain.handle('app:buildReport', async (_e, snapshotId: string, compareId?: string) => {
     const snapshot = await loadSnapshot(snapshotId)
     if (!snapshot) throw new Error('数据快照不存在或已被删除')
-    const compare = await resolveCompare(snapshot.platform, snapshot.importedAt, compareId)
+    const compare = await resolveCompare(snapshot.platform, snapshot.importedAt, snapshot.account, compareId)
     const analysis = runAnalysis(snapshot, compare)
     const diagnosis = await loadDiagnosis(snapshotId)
     return { html: buildReportHtml(analysis, diagnosis) }
@@ -123,7 +124,7 @@ export function registerIpc(): void {
   ipcMain.handle('app:exportReport', async (e, snapshotId: string, compareId?: string) => {
     const snapshot = await loadSnapshot(snapshotId)
     if (!snapshot) throw new Error('数据快照不存在或已被删除')
-    const compare = await resolveCompare(snapshot.platform, snapshot.importedAt, compareId)
+    const compare = await resolveCompare(snapshot.platform, snapshot.importedAt, snapshot.account, compareId)
     const analysis = runAnalysis(snapshot, compare)
     const diagnosis = await loadDiagnosis(snapshotId)
     const html = buildReportHtml(analysis, diagnosis)
@@ -139,5 +140,33 @@ export function registerIpc(): void {
     if (res.canceled || !res.filePath) return { canceled: true }
     await writeFile(res.filePath, html, 'utf-8')
     return { canceled: false, path: res.filePath }
+  })
+
+  ipcMain.handle('app:exportBackup', async (e) => {
+    const backup = await createBackup()
+    const win = BrowserWindow.fromWebContents(e.sender)
+    const d = new Date()
+    const stamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`
+    const res = await dialog.showSaveDialog(win ?? ({} as never), {
+      title: '导出全部数据备份',
+      defaultPath: `HotFlow_备份_${stamp}.json`,
+      filters: [{ name: 'HotFlow 备份', extensions: ['json'] }]
+    })
+    if (res.canceled || !res.filePath) return { canceled: true }
+    await writeFile(res.filePath, JSON.stringify(backup, null, 2), 'utf-8')
+    return { canceled: false, path: res.filePath, snapshots: backup.snapshots.length }
+  })
+
+  ipcMain.handle('app:importBackup', async (e) => {
+    const win = BrowserWindow.fromWebContents(e.sender)
+    const res = await dialog.showOpenDialog(win ?? ({} as never), {
+      title: '选择备份文件',
+      filters: [{ name: 'HotFlow 备份', extensions: ['json'] }],
+      properties: ['openFile']
+    })
+    if (res.canceled || res.filePaths.length === 0) return { canceled: true }
+    const raw = await readFile(res.filePaths[0], 'utf-8')
+    const stats = await restoreBackup(raw)
+    return { canceled: false, ...stats }
   })
 }

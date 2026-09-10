@@ -1,7 +1,7 @@
 import { readFileSync } from 'fs'
 import { dirname, join } from 'path'
 import { engagementRateOf } from '@shared/metrics'
-import type { AnalysisResult, DiagnosisResult, VideoRecord } from '@shared/types'
+import type { AnalysisResult, DiagnosisResult, VideoDiff, VideoRecord } from '@shared/types'
 
 /** 优先内联本地 echarts.min.js，打包后也能离线打开；失败时退回 CDN */
 function loadEchartsJs(): string {
@@ -138,6 +138,25 @@ function diagnosisHtml(diagnosis: DiagnosisResult | null): string {  if (!diagno
   return parts.join('')
 }
 
+/** 涨跌榜表格（涨/跌各一张） */
+function diffTableHtml(items: VideoDiff[], dir: 'up' | 'down'): string {
+  const rows = items
+    .map(
+      (d) => `<tr>
+      <td class="title-cell">${esc(d.title)}</td>
+      <td class="num">${fmtNum(d.prevPlays)}</td>
+      <td class="num">${fmtNum(d.curPlays)}</td>
+      <td class="num ${dir}">${dir === 'up' ? '+' : ''}${fmtNum(d.playsDiff)}</td>
+      <td class="num ${dir}">${d.playsDiffPercent == null ? '—' : `${dir === 'up' ? '+' : ''}${d.playsDiffPercent.toFixed(1)}%`}</td>
+    </tr>`
+    )
+    .join('')
+  return `<table>
+    <thead><tr><th>标题</th><th>上期播放</th><th>本期播放</th><th>差值</th><th>幅度</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`
+}
+
 export function buildReportHtml(analysis: AnalysisResult, diagnosis: DiagnosisResult | null): string {
   const { totals, deltas, increments } = analysis
   const accountLabel = analysis.snapshot.account || '未命名账号'
@@ -155,6 +174,9 @@ export function buildReportHtml(analysis: AnalysisResult, diagnosis: DiagnosisRe
   const durLabels = analysis.durationBuckets.map((d) => d.label)
   const durCompletion = analysis.durationBuckets.map((d) => d.avgCompletionRate)
   const durPlays = analysis.durationBuckets.map((d) => d.avgPlays)
+  const incLabels = analysis.incrementTrend.map((p) => p.label)
+  const incPlays = analysis.incrementTrend.map((p) => p.plays)
+  const incFollows = analysis.incrementTrend.map((p) => p.followsGained)
 
   const granularityNote =
     analysis.trendGranularity === 'day' ? '按日' : analysis.trendGranularity === 'week' ? '按周' : '按月'
@@ -164,7 +186,12 @@ export function buildReportHtml(analysis: AnalysisResult, diagnosis: DiagnosisRe
     ? `<script>${lib}</script>`
     : `<script src="https://cdn.jsdelivr.net/npm/echarts@6/dist/echarts.min.js"></script>`
 
-  const payload = JSON.stringify({ trendLabels, trendPlays, trendEng, hourLabels, hourPlays, hourEng, durLabels, durCompletion, durPlays }).replace(/</g, '\\u003c')
+  const payload = JSON.stringify({
+    trendLabels, trendPlays, trendEng,
+    hourLabels, hourPlays, hourEng,
+    durLabels, durCompletion, durPlays,
+    incLabels, incPlays, incFollows
+  }).replace(/</g, '\\u003c')
 
   return `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -209,6 +236,10 @@ export function buildReportHtml(analysis: AnalysisResult, diagnosis: DiagnosisRe
   .diag-raw { white-space: pre-wrap; background: #f8f9fc; padding: 14px; border-radius: 8px; font-size: 13px; line-height: 1.7; }
   .diag-meta { color: #9ca3af; font-size: 12px; margin-top: 10px; }
   .footer { color: #9ca3af; font-size: 12px; text-align: center; padding: 8px 0 24px; }
+  .num.up { color: #16a34a; font-weight: 600; }
+  .num.down { color: #dc2626; font-weight: 600; }
+  .diff-h { font-size: 14px; margin: 0 0 8px 2px; }
+  .diff-h.up { color: #16a34a; } .diff-h.down { color: #dc2626; }
   .insight { font-size: 13.5px; line-height: 1.8; color: #374151; background: #f0fdfa; border-left: 3px solid #10b981; border-radius: 0 8px 8px 0; padding: 10px 14px; margin-top: 4px; }
   @media print {
     body { background: #fff; padding: 0; }
@@ -260,6 +291,7 @@ export function buildReportHtml(analysis: AnalysisResult, diagnosis: DiagnosisRe
       ? `<div class="card"><h3>发布趋势（${granularityNote}）</h3><div id="trend" class="chart"></div></div>`
       : ''
   }
+  ${incLabels.length ? `<div class="card"><h3>净增趋势（相邻两次导入之间）</h3><div id="inc" class="chart"></div></div>` : ''}
   ${analysis.hourStats.length ? `<div class="card"><h3>发布时段 × 平均表现</h3><div id="hour" class="chart"></div>${hourInsightHtml(analysis)}</div>` : ''}
   ${analysis.durationBuckets.length ? `<div class="card"><h3>视频时长 × 平均表现</h3><div id="duration" class="chart"></div></div>` : ''}
 
@@ -271,6 +303,15 @@ export function buildReportHtml(analysis: AnalysisResult, diagnosis: DiagnosisRe
     <h3>表现最差 Bottom 5（按播放量）</h3>
     ${recordTable(analysis.bottomByPlays, 'bad')}
   </div>
+
+  ${
+    analysis.videoDiffs && (analysis.videoDiffs.up.length > 0 || analysis.videoDiffs.down.length > 0)
+      ? `<div class="card"><h3>视频涨跌榜（与对比期同名同发布日视频）</h3><div class="two-col">
+          <div><p class="diff-h up">↑ 涨幅 Top 5</p>${diffTableHtml(analysis.videoDiffs.up, 'up')}</div>
+          <div><p class="diff-h down">↓ 跌幅 Top 5</p>${diffTableHtml(analysis.videoDiffs.down, 'down')}</div>
+        </div></div>`
+      : ''
+  }
 
   <div class="card">
     <h3>AI 内容诊断与发布策略建议</h3>
@@ -301,6 +342,22 @@ ${echartsTag}
       series: [
         { name: '播放量', type: 'line', smooth: true, data: D.trendPlays, itemStyle: { color: '#4f6ef7' }, areaStyle: { opacity: 0.08 } },
         { name: '互动率%', type: 'line', smooth: true, yAxisIndex: 1, data: D.trendEng, itemStyle: { color: '#f59e0b' } }
+      ]
+    });
+  }
+  if (D.incLabels.length) {
+    mk('inc', {
+      tooltip: { trigger: 'axis' },
+      legend: { top: 0, data: ['净增播放', '净增涨粉'] },
+      grid: { left: 8, right: 8, top: 48, bottom: 4, containLabel: true },
+      xAxis: { type: 'category', data: D.incLabels, axisLabel: { interval: 0, fontSize: 11 } },
+      yAxis: [
+        { type: 'value' },
+        { type: 'value' }
+      ],
+      series: [
+        { name: '净增播放', type: 'bar', data: D.incPlays, itemStyle: { color: '#4f6ef7', borderRadius: [4, 4, 0, 0] } },
+        { name: '净增涨粉', type: 'line', yAxisIndex: 1, data: D.incFollows, itemStyle: { color: '#10b981' } }
       ]
     });
   }

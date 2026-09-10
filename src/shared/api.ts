@@ -35,4 +35,8 @@ export interface Api {
   onLlmChunk(cb: (text: string) => void): () => void
   buildReport(snapshotId: string, compareId?: string): Promise<{ html: string }>
   exportReport(snapshotId: string, compareId?: string): Promise<{ canceled: boolean; path?: string }>
+  /** 导出全部数据（快照 + 设置）为 JSON 备份文件 */
+  exportBackup(): Promise<{ canceled: boolean; path?: string; snapshots?: number }>
+  /** 选择备份文件并恢复（同名覆盖、新增追加） */
+  importBackup(): Promise<{ canceled: boolean; snapshots?: number; settings?: boolean }>
 }

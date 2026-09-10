@@ -21,7 +21,9 @@ const api: Api = {
     return () => ipcRenderer.removeListener('llm:chunk', listener)
   },
   buildReport: (snapshotId, compareId) => ipcRenderer.invoke('app:buildReport', snapshotId, compareId),
-  exportReport: (snapshotId, compareId) => ipcRenderer.invoke('app:exportReport', snapshotId, compareId)
+  exportReport: (snapshotId, compareId) => ipcRenderer.invoke('app:exportReport', snapshotId, compareId),
+  exportBackup: () => ipcRenderer.invoke('app:exportBackup'),
+  importBackup: () => ipcRenderer.invoke('app:importBackup')
 }
 
 contextBridge.exposeInMainWorld('api', api)
