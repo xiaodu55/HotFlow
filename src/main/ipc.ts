@@ -2,7 +2,7 @@ import { BrowserWindow, app, dialog, ipcMain } from 'electron'
 import { readFile, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { computeIncrementTrend, computeIncrements, runAnalysis } from '@shared/metrics'
-import type { AppSettings, LlmConfig } from '@shared/types'
+import type { AnalysisResult, AppSettings, LlmConfig, Snapshot } from '@shared/types'
 import { createBackup, restoreBackup } from './backup'
 import { importFromFile, inspectTable, type ImportMeta } from './ingest'
 import {
@@ -40,6 +40,39 @@ async function loadAccountChain(platform: string, account = '', importedAt: stri
   return snaps.sort((a, b) => (a.importedAt < b.importedAt ? -1 : 1))
 }
 
+interface AnalysisBundle {
+  snapshot: Snapshot
+  compare: Snapshot | null
+  analysis: AnalysisResult
+}
+
+/** 分析结果缓存：同一「快照+对比期」只读盘计算一次，切换页面/反复导出不再重算。
+ *  快照数据仅在导入、删除、恢复备份时变化，这些操作完成后必须 clearAnalysisCache() */
+const analysisCache = new Map<string, AnalysisBundle>()
+
+function clearAnalysisCache(): void {
+  analysisCache.clear()
+}
+
+/** 计算或复用分析结果。统一走净增趋势链，看板/诊断/报告口径一致 */
+async function getAnalysisBundle(snapshotId: string, compareId?: string): Promise<AnalysisBundle> {
+  const key = `${snapshotId}|${compareId ?? ''}`
+  const cached = analysisCache.get(key)
+  if (cached) {
+    return { ...cached, analysis: { ...cached.analysis, generatedAt: new Date().toISOString() } }
+  }
+  const snapshot = await loadSnapshot(snapshotId)
+  if (!snapshot) throw new Error('数据快照不存在或已被删除')
+  const compare = await resolveCompare(snapshot.platform, snapshot.importedAt, snapshot.account, compareId)
+  const chain = await loadAccountChain(snapshot.platform, snapshot.account, snapshot.importedAt)
+  const analysis = runAnalysis(snapshot, compare, computeIncrementTrend(chain))
+  const bundle: AnalysisBundle = { snapshot, compare, analysis }
+  // 缓存持有完整快照记录，限制条数防内存膨胀
+  if (analysisCache.size >= 8) analysisCache.clear()
+  analysisCache.set(key, bundle)
+  return bundle
+}
+
 export function registerIpc(): void {
   ipcMain.handle('app:pickAndImport', async (e, platformId: string) => {
     const win = BrowserWindow.fromWebContents(e.sender)
@@ -49,16 +82,20 @@ export function registerIpc(): void {
       properties: ['openFile']
     })
     if (res.canceled || res.filePaths.length === 0) return null
-    return { snapshot: await importFromFile(res.filePaths[0], platformId) }
+    const snapshot = await importFromFile(res.filePaths[0], platformId)
+    clearAnalysisCache()
+    return { snapshot }
   })
 
   ipcMain.handle('app:inspectTable', async (_e, filePath: string, platformId: string) =>
     inspectTable(filePath, platformId)
   )
 
-  ipcMain.handle('app:importFile', async (_e, filePath: string, platformId: string, meta?: ImportMeta) => ({
-    snapshot: await importFromFile(filePath, platformId, meta)
-  }))
+  ipcMain.handle('app:importFile', async (_e, filePath: string, platformId: string, meta?: ImportMeta) => {
+    const snapshot = await importFromFile(filePath, platformId, meta)
+    clearAnalysisCache()
+    return { snapshot }
+  })
 
   ipcMain.handle('app:listSnapshots', () => listSnapshots())
 
@@ -68,14 +105,14 @@ export function registerIpc(): void {
     return { snapshot, diagnosis: await loadDiagnosis(id) }
   })
 
-  ipcMain.handle('app:deleteSnapshot', (_e, id: string) => deleteSnapshot(id))
+  ipcMain.handle('app:deleteSnapshot', async (_e, id: string) => {
+    await deleteSnapshot(id)
+    clearAnalysisCache()
+  })
 
   ipcMain.handle('app:runAnalysis', async (_e, snapshotId: string, compareId?: string) => {
-    const snapshot = await loadSnapshot(snapshotId)
-    if (!snapshot) throw new Error('数据快照不存在或已被删除')
-    const compare = await resolveCompare(snapshot.platform, snapshot.importedAt, snapshot.account, compareId)
-    const chain = await loadAccountChain(snapshot.platform, snapshot.account, snapshot.importedAt)
-    return runAnalysis(snapshot, compare, computeIncrementTrend(chain))
+    const { analysis } = await getAnalysisBundle(snapshotId, compareId)
+    return analysis
   })
 
   ipcMain.handle('app:getSettings', () => loadSettings())
@@ -83,11 +120,8 @@ export function registerIpc(): void {
   ipcMain.handle('app:testLlm', async (_e, cfg: LlmConfig) => testLlm(cfg))
 
   ipcMain.handle('app:runDiagnosis', async (e, snapshotId: string, compareId?: string) => {
-    const snapshot = await loadSnapshot(snapshotId)
-    if (!snapshot) throw new Error('数据快照不存在或已被删除')
+    const { snapshot, analysis } = await getAnalysisBundle(snapshotId, compareId)
     const settings = await loadSettings()
-    const compare = await resolveCompare(snapshot.platform, snapshot.importedAt, snapshot.account, compareId)
-    const analysis = runAnalysis(snapshot, compare)
     const previous = await loadDiagnosis(snapshotId)
     const diagnosis = await runDiagnosis(settings.llm, snapshot, analysis, (text) => {
       if (!e.sender.isDestroyed()) e.sender.send('llm:chunk', text)
@@ -99,13 +133,10 @@ export function registerIpc(): void {
   })
 
   ipcMain.handle('app:askDiagnosis', async (e, snapshotId: string, question: string) => {
-    const snapshot = await loadSnapshot(snapshotId)
-    if (!snapshot) throw new Error('数据快照不存在或已被删除')
+    const { snapshot, analysis } = await getAnalysisBundle(snapshotId)
     const diagnosis = await loadDiagnosis(snapshotId)
     if (!diagnosis) throw new Error('请先生成 AI 诊断，再进行追问')
     const settings = await loadSettings()
-    const compare = await resolveCompare(snapshot.platform, snapshot.importedAt, snapshot.account)
-    const analysis = runAnalysis(snapshot, compare)
     const answer = await askFollowUp(settings.llm, snapshot, analysis, diagnosis, question, (text) => {
       if (!e.sender.isDestroyed()) e.sender.send('llm:chunk', text)
     })
@@ -118,19 +149,13 @@ export function registerIpc(): void {
   })
 
   ipcMain.handle('app:buildReport', async (_e, snapshotId: string, compareId?: string) => {
-    const snapshot = await loadSnapshot(snapshotId)
-    if (!snapshot) throw new Error('数据快照不存在或已被删除')
-    const compare = await resolveCompare(snapshot.platform, snapshot.importedAt, snapshot.account, compareId)
-    const analysis = runAnalysis(snapshot, compare)
+    const { analysis } = await getAnalysisBundle(snapshotId, compareId)
     const diagnosis = await loadDiagnosis(snapshotId)
     return { html: buildReportHtml(analysis, diagnosis) }
   })
 
   ipcMain.handle('app:exportReport', async (e, snapshotId: string, compareId?: string) => {
-    const snapshot = await loadSnapshot(snapshotId)
-    if (!snapshot) throw new Error('数据快照不存在或已被删除')
-    const compare = await resolveCompare(snapshot.platform, snapshot.importedAt, snapshot.account, compareId)
-    const analysis = runAnalysis(snapshot, compare)
+    const { analysis } = await getAnalysisBundle(snapshotId, compareId)
     const diagnosis = await loadDiagnosis(snapshotId)
     const html = buildReportHtml(analysis, diagnosis)
 
@@ -172,6 +197,7 @@ export function registerIpc(): void {
     if (res.canceled || res.filePaths.length === 0) return { canceled: true }
     const raw = await readFile(res.filePaths[0], 'utf-8')
     const stats = await restoreBackup(raw)
+    clearAnalysisCache()
     return { canceled: false, ...stats }
   })
 
@@ -190,6 +216,7 @@ export function registerIpc(): void {
         note: '8月数据'
       })
     ]
+    clearAnalysisCache()
     return { count: outcomes.length }
   })
 }
