@@ -54,7 +54,7 @@ export async function loadSnapshot(id: string): Promise<Snapshot | null> {
     const parsed = JSON.parse(await readFile(snapshotFile(id), 'utf-8')) as Partial<Snapshot>
     return { account: '', note: '', ...parsed } as Snapshot
   } catch (err) {
-    logWarn('history:loadSnapshot', err)
+    if (!isNotFound(err)) logWarn('history:loadSnapshot', err)
     return null
   }
 }
@@ -72,28 +72,63 @@ export async function saveDiagnosis(id: string, diagnosis: DiagnosisResult): Pro
 
 const ARCHIVE_CAP = 10
 
+function diagnosisArchiveFile(id: string): string {
+  return join(historyDir(), `${id}.diagnosis-archive.json`)
+}
+
+function isNotFound(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && 'code' in err && (err as { code?: string }).code === 'ENOENT'
+}
+
 /** 重新生成诊断前归档旧诊断（每份快照最多保留 10 份历史） */
 export async function archiveDiagnosis(id: string, diagnosis: DiagnosisResult): Promise<void> {
   await ensureHistoryDir()
-  const file = join(historyDir(), `${id}.diagnosis-archive.json`)
   let list: DiagnosisResult[] = []
   try {
-    list = JSON.parse(await readFile(file, 'utf-8')) as DiagnosisResult[]
+    list = JSON.parse(await readFile(diagnosisArchiveFile(id), 'utf-8')) as DiagnosisResult[]
   } catch (err) {
-    logWarn('history:archiveDiagnosis', err)
+    if (!isNotFound(err)) logWarn('history:archiveDiagnosis', err)
     list = []
   }
   list.unshift(diagnosis)
-  await writeFile(file, JSON.stringify(list.slice(0, ARCHIVE_CAP)), 'utf-8')
+  await writeFile(diagnosisArchiveFile(id), JSON.stringify(list.slice(0, ARCHIVE_CAP)), 'utf-8')
+}
+
+/** 诊断归档（按时间倒序，[0] 为最近被接替的一份） */
+export async function loadDiagnosisArchive(id: string): Promise<DiagnosisResult[]> {
+  try {
+    const list = JSON.parse(await readFile(diagnosisArchiveFile(id), 'utf-8')) as DiagnosisResult[]
+    return Array.isArray(list) ? list : []
+  } catch (err) {
+    if (!isNotFound(err)) logWarn('history:loadDiagnosisArchive', err)
+    return []
+  }
 }
 
 export async function loadDiagnosis(id: string): Promise<DiagnosisResult | null> {
   try {
     return JSON.parse(await readFile(diagnosisFile(id), 'utf-8')) as DiagnosisResult
   } catch (err) {
-    logWarn('history:loadDiagnosis', err)
+    if (!isNotFound(err)) logWarn('history:loadDiagnosis', err)
     return null
   }
+}
+
+/** 跨期策略闭环：找同平台、同账号、早于指定导入时间的最近一份诊断（上期建议来源） */
+export async function findPreviousDiagnosis(
+  platform: string,
+  importedAt: string,
+  account = ''
+): Promise<DiagnosisResult | null> {
+  const metas = (await listSnapshots()).filter(
+    (m) => m.platform === platform && (m.account ?? '') === account && m.importedAt < importedAt
+  )
+  for (const m of metas) {
+    const d = await loadDiagnosis(m.id)
+    // 跳过解析失败的诊断（rawText 兜底型），结构化建议才有复盘价值
+    if (d && !d.rawText) return d
+  }
+  return null
 }
 
 /** 找同平台、同账号、早于指定导入时间的最近一次导入，用作环比基线 */

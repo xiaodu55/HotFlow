@@ -194,6 +194,16 @@ export interface TableInspect {
   samples: Record<string, string>
 }
 
+/** 看板「策略复盘」卡片数据：上期建议 + 本期复盘结论 */
+export interface StrategyReview {
+  /** 上期诊断（建议来源），无上期诊断为 null */
+  previous: DiagnosisResult | null
+  /** 本期诊断生成的复盘结论；尚未重新生成诊断时为空数组 */
+  retrospective: string[]
+  /** 上期诊断生成时间 */
+  previousGeneratedAt: string | null
+}
+
 /** LLM 诊断与建议的结构化结果 */
 export interface DiagnosisResult {
   summary: string

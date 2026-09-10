@@ -8,9 +8,11 @@ import { importFromFile, inspectTable, type ImportMeta } from './ingest'
 import {
   archiveDiagnosis,
   deleteSnapshot,
+  findPreviousDiagnosis,
   findPreviousSnapshot,
   listSnapshots,
   loadDiagnosis,
+  loadDiagnosisArchive,
   loadSnapshot,
   saveDiagnosis
 } from './history'
@@ -122,7 +124,10 @@ export function registerIpc(): void {
   ipcMain.handle('app:runDiagnosis', async (e, snapshotId: string, compareId?: string) => {
     const { snapshot, analysis } = await getAnalysisBundle(snapshotId, compareId)
     const settings = await loadSettings()
-    const previous = await loadDiagnosis(snapshotId)
+    // 同快照重新生成→复用自己的旧诊断；首次诊断→回退同账号上一期的诊断（策略闭环）
+    const previous =
+      (await loadDiagnosis(snapshotId)) ??
+      (await findPreviousDiagnosis(snapshot.platform, snapshot.importedAt, snapshot.account))
     const diagnosis = await runDiagnosis(settings.llm, snapshot, analysis, (text) => {
       if (!e.sender.isDestroyed()) e.sender.send('llm:chunk', text)
     }, previous)
@@ -146,6 +151,21 @@ export function registerIpc(): void {
     }
     await saveDiagnosis(snapshotId, updated)
     return updated
+  })
+
+  ipcMain.handle('app:getStrategyReview', async (_e, snapshotId: string) => {
+    const snapshot = await loadSnapshot(snapshotId)
+    if (!snapshot) return { previous: null, retrospective: [], previousGeneratedAt: null }
+    const archive = await loadDiagnosisArchive(snapshotId)
+    const current = await loadDiagnosis(snapshotId)
+    // 上期建议：优先取被接替的归档诊断，否则回退同账号上一期的诊断
+    const previous =
+      archive[0] ?? (await findPreviousDiagnosis(snapshot.platform, snapshot.importedAt, snapshot.account))
+    return {
+      previous,
+      retrospective: current?.retrospective ?? [],
+      previousGeneratedAt: current?.previousGeneratedAt ?? null
+    }
   })
 
   ipcMain.handle('app:buildReport', async (_e, snapshotId: string, compareId?: string) => {

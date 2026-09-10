@@ -24,7 +24,8 @@ const api: Api = {
   exportReport: (snapshotId, compareId) => ipcRenderer.invoke('app:exportReport', snapshotId, compareId),
   exportBackup: () => ipcRenderer.invoke('app:exportBackup'),
   importBackup: () => ipcRenderer.invoke('app:importBackup'),
-  loadSampleData: () => ipcRenderer.invoke('app:loadSampleData')
+  loadSampleData: () => ipcRenderer.invoke('app:loadSampleData'),
+  getStrategyReview: (snapshotId) => ipcRenderer.invoke('app:getStrategyReview', snapshotId)
 }
 
 contextBridge.exposeInMainWorld('api', api)

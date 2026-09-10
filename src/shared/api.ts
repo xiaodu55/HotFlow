@@ -6,6 +6,7 @@ import type {
   LlmConfig,
   Snapshot,
   SnapshotMeta,
+  StrategyReview,
   TableInspect
 } from './types'
 
@@ -41,4 +42,6 @@ export interface Api {
   importBackup(): Promise<{ canceled: boolean; snapshots?: number; settings?: boolean }>
   /** 加载内置示例数据（两期快照，账号「示例账号」），返回导入条数 */
   loadSampleData(): Promise<{ count: number }>
+  /** 看板「策略复盘」卡片：上期建议与本期复盘结论（无上期诊断时 previous 为 null） */
+  getStrategyReview(snapshotId: string): Promise<StrategyReview>
 }

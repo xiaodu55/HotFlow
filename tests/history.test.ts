@@ -10,7 +10,8 @@ vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => dir) }
 }))
 
-const { deleteSnapshot, listSnapshots, saveSnapshot } = await import('../src/main/history')
+const { deleteSnapshot, findPreviousDiagnosis, listSnapshots, loadDiagnosis, loadDiagnosisArchive, saveSnapshot, saveDiagnosis } =
+  await import('../src/main/history')
 
 /** 与 paths.historyDir() 对应：mock 的 userData 下再拼一级 history */
 function hist(): string {
@@ -98,5 +99,56 @@ describe('history 快照存储（meta 索引）', () => {
     await writeFile(join(hist(), 'broken.json'), '{oops', 'utf-8')
     const metas = await listSnapshots()
     expect(metas.map((m) => m.id)).toEqual(['good'])
+  })
+})
+
+describe('跨期诊断查找（策略闭环）', () => {
+  const diagnosis = (summary: string, rawText?: string): Record<string, unknown> => ({
+    summary,
+    hotPatterns: [],
+    weakPatterns: [],
+    titleNotes: '',
+    advicePublishTime: ['建议 19-22点 发布'],
+    adviceTopics: [],
+    adviceActions: ['固定更新时间'],
+    generatedAt: '2026-08-01T12:00:00.000Z',
+    ...(rawText ? { rawText } : {})
+  })
+
+  it('回溯到上一期快照的诊断', async () => {
+    await saveSnapshot(snap('p1', [rec({})]))
+    await saveSnapshot(snap('p2', [rec({})]))
+    await saveDiagnosis('p1', diagnosis('上期总结') as never)
+    const prev = await findPreviousDiagnosis('douyin', 'p2', '')
+    expect(prev?.summary).toBe('上期总结')
+  })
+
+  it('同账号隔离，不串其他账号的诊断', async () => {
+    await saveSnapshot({ ...snap('p1', [rec({})]), account: 'A' })
+    await saveSnapshot(snap('p2', [rec({})]))
+    await saveDiagnosis('p1', diagnosis('A 账号的诊断') as never)
+    expect(await findPreviousDiagnosis('douyin', 'p2', '')).toBeNull()
+    expect((await findPreviousDiagnosis('douyin', 'p2', 'A'))?.summary).toBe('A 账号的诊断')
+  })
+
+  it('跳过解析失败的诊断（rawText 兜底型）', async () => {
+    await saveSnapshot(snap('p1', [rec({})]))
+    await saveSnapshot(snap('p2', [rec({})]))
+    await saveDiagnosis('p1', diagnosis('坏输出', '这不是 JSON') as never)
+    expect(await findPreviousDiagnosis('douyin', 'p2', '')).toBeNull()
+  })
+
+  it('无任何诊断时返回 null', async () => {
+    await saveSnapshot(snap('p1', [rec({})]))
+    expect(await findPreviousDiagnosis('douyin', 'p1', '')).toBeNull()
+  })
+
+  it('归档按时间倒序，[0] 为最近被接替的一份', async () => {
+    const { archiveDiagnosis } = await import('../src/main/history')
+    await archiveDiagnosis('p1', diagnosis('旧一版') as never)
+    await archiveDiagnosis('p1', diagnosis('新一版') as never)
+    await archiveDiagnosis('p1', diagnosis('被接替') as never)
+    const archive = await loadDiagnosisArchive('p1')
+    expect(archive.map((d) => d.summary)).toEqual(['被接替', '新一版', '旧一版'])
   })
 })
