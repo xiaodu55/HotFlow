@@ -38,7 +38,8 @@
     "test": "vitest run",
     "sample": "node scripts/gen-sample.mjs",
     "icon": "node scripts/gen-icon.mjs",
-    "dist": "electron-vite build && electron-builder --win"
+    "dist": "electron-vite build && electron-builder --win",
+    "simulate": "node scripts/simulate-weeks.mjs"
   },
   "dependencies": {
     "@ant-design/icons": "^6.3.4",
