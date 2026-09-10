@@ -5,6 +5,7 @@ import type { AppSettings, LlmConfig } from '@shared/types'
 import { createBackup, restoreBackup } from './backup'
 import { importFromFile, inspectTable, type ImportMeta } from './ingest'
 import {
+  archiveDiagnosis,
   deleteSnapshot,
   findPreviousSnapshot,
   listSnapshots,
@@ -86,9 +87,12 @@ export function registerIpc(): void {
     const settings = await loadSettings()
     const compare = await resolveCompare(snapshot.platform, snapshot.importedAt, snapshot.account, compareId)
     const analysis = runAnalysis(snapshot, compare)
+    const previous = await loadDiagnosis(snapshotId)
     const diagnosis = await runDiagnosis(settings.llm, snapshot, analysis, (text) => {
       if (!e.sender.isDestroyed()) e.sender.send('llm:chunk', text)
-    })
+    }, previous)
+    // 重新生成时归档旧诊断（策略闭环：旧建议不丢失）
+    if (previous) await archiveDiagnosis(snapshotId, previous)
     await saveDiagnosis(snapshotId, diagnosis)
     return diagnosis
   })

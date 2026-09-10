@@ -11,7 +11,7 @@ import { MetricTipByKey } from '../components/MetricTip'
 import Chart from '../components/Chart'
 import KpiCard from '../components/KpiCard'
 import PageHeader from '../components/PageHeader'
-import { fmtNum, fmtPct, fmtTime } from '../utils'
+import { fmtNum, fmtPct, fmtTime, daysSince } from '../utils'
 
 /** 卡片标题 + 口径说明图标 */
 function MetricTitle({ tipKey, text }: { tipKey: keyof typeof METRIC_INFO; text: string }): ReactNode {
@@ -38,6 +38,42 @@ function vGradient(color: string, from: string, to: string): echarts.graphic.Lin
     { offset: 0, color: color + from },
     { offset: 1, color: color + to }
   ])
+}
+
+type NDatum = { value: number; n: number; itemStyle?: Record<string, unknown> }
+
+/** 带样本数提示的 axis tooltip：标题附「n 条视频」，样本不足时特别标注 */
+function tooltipWithSampleN(): EChartsOption['tooltip'] {
+  return {
+    trigger: 'axis',
+    formatter: (params: unknown) => {
+      const list = (Array.isArray(params) ? params : [params]) as Array<{
+        name?: string
+        marker?: string
+        seriesName?: string
+        value?: number
+        data?: unknown
+      }>
+      const first = list[0]
+      const raw = first?.data as { n?: number } | number | undefined
+      const n = typeof raw === 'object' && raw != null ? raw.n : undefined
+      const lines = list.map((p) => `${p.marker ?? ''}${p.seriesName ?? ''}: ${p.value ?? '—'}`)
+      const head = `${first?.name ?? ''}${n != null ? `（${n} 条视频${n < 2 ? '，样本不足仅供参考' : ''}）` : ''}`
+      return [head, ...lines].join('<br/>')
+    }
+  }
+}
+
+/** 低样本（n<2）柱子灰显，防止单条偶然爆款误导时段/时长策略 */
+function barDatum(value: number | null, n: number, color: string, withGradient = true): NDatum {
+  const base: NDatum = { value: value ?? 0, n }
+  base.itemStyle =
+    n < 2
+      ? { color: 'rgba(148, 163, 184, 0.4)' }
+      : withGradient
+        ? { color: vGradient(color, 'aa', '22'), borderRadius: [4, 4, 0, 0] }
+        : { color, borderRadius: [4, 4, 0, 0] }
+  return base
 }
 
 function VideoList({ title, records, highlight }: { title: string; records: VideoRecord[]; highlight: string }) {
@@ -206,7 +242,7 @@ export default function DashboardPage({ analysis, snapshots, compareId, onCompar
   }
 
   const hourOption: EChartsOption = {
-    tooltip: { trigger: 'axis' },
+    tooltip: tooltipWithSampleN(),
     legend: { top: 0, data: ['篇均播放', '互动率'] },
     grid: { left: 8, right: 8, top: 48, bottom: 4, containLabel: true },
     xAxis: { type: 'category', data: analysis.hourStats.map((h) => h.label), axisLabel: { interval: 0, fontSize: 11 } },
@@ -218,8 +254,7 @@ export default function DashboardPage({ analysis, snapshots, compareId, onCompar
       {
         name: '篇均播放',
         type: 'bar',
-        data: analysis.hourStats.map((h) => h.avgPlays),
-        itemStyle: { borderRadius: [5, 5, 0, 0], color: vGradient('#22d3ee', 'aa', '22') },
+        data: analysis.hourStats.map((h) => barDatum(h.avgPlays, h.videoCount, '#22d3ee')),
         barMaxWidth: 26
       },
       {
@@ -234,7 +269,7 @@ export default function DashboardPage({ analysis, snapshots, compareId, onCompar
   }
 
   const durationOption: EChartsOption = {
-    tooltip: { trigger: 'axis' },
+    tooltip: tooltipWithSampleN(),
     legend: { top: 0, data: ['平均完播率', '篇均播放'] },
     grid: { left: 8, right: 8, top: 48, bottom: 4, containLabel: true },
     xAxis: { type: 'category', data: analysis.durationBuckets.map((d) => d.label), axisLabel: { interval: 0, fontSize: 11 } },
@@ -246,16 +281,14 @@ export default function DashboardPage({ analysis, snapshots, compareId, onCompar
       {
         name: '平均完播率',
         type: 'bar',
-        data: analysis.durationBuckets.map((d) => d.avgCompletionRate),
-        itemStyle: { borderRadius: [5, 5, 0, 0], color: vGradient('#34d399', 'aa', '22') },
+        data: analysis.durationBuckets.map((d) => barDatum(d.avgCompletionRate, d.videoCount, '#34d399')),
         barMaxWidth: 26
       },
       {
         name: '篇均播放',
         type: 'bar',
         yAxisIndex: 1,
-        data: analysis.durationBuckets.map((d) => d.avgPlays),
-        itemStyle: { borderRadius: [5, 5, 0, 0], color: vGradient('#818cf8', 'aa', '22') },
+        data: analysis.durationBuckets.map((d) => barDatum(d.avgPlays, d.videoCount, '#a5b4fc')),
         barMaxWidth: 26
       }
     ]
@@ -263,12 +296,12 @@ export default function DashboardPage({ analysis, snapshots, compareId, onCompar
 
   const incrementOption: EChartsOption = {
     tooltip: { trigger: 'axis' },
-    legend: { data: ['净增播放', '净增涨粉'] },
-    grid: { left: 70, right: 60, top: 40, bottom: 30 },
-    xAxis: { type: 'category', data: analysis.incrementTrend.map((p) => p.label) },
+    legend: { top: 0, data: ['净增播放', '净增涨粉'] },
+    grid: { left: 8, right: 8, top: 48, bottom: 4, containLabel: true },
+    xAxis: { type: 'category', data: analysis.incrementTrend.map((p) => p.label), axisLabel: { interval: 0, fontSize: 11 } },
     yAxis: [
-      { type: 'value', name: '净增播放' },
-      { type: 'value', name: '净增涨粉' }
+      { type: 'value' },
+      { type: 'value' }
     ],
     series: [
       {
@@ -293,6 +326,7 @@ export default function DashboardPage({ analysis, snapshots, compareId, onCompar
     { label: '视频总数', value: totals.videoCount, key: 'videoCount', fmt: fmtNum, suffix: '条', tipKey: 'videoCount' },
     { label: '总播放', value: totals.plays, key: 'plays', fmt: fmtNum, tipKey: 'plays' },
     { label: '篇均播放', value: totals.avgPlays, key: 'avgPlays', fmt: fmtNum, tipKey: 'avgPlays' },
+    { label: '中位数播放', value: totals.medianPlays, key: 'medianPlays', fmt: fmtNum, tipKey: 'medianPlays' },
     { label: '互动率', value: totals.engagementRate, key: 'engagementRate', fmt: fmtPct, tipKey: 'engagementRate' },
     ...(totals.completionRate != null
       ? [{ label: '平均完播率', value: totals.completionRate, key: 'completionRate', fmt: fmtPct, tipKey: 'completionRate' as const }]
@@ -341,6 +375,19 @@ export default function DashboardPage({ analysis, snapshots, compareId, onCompar
           description="指标卡和图表标题旁的 ? 图标，悬停即可查看计算公式与解读；页头「对比期」可以任选两次导入做对比；净增卡是最接近「本期真实表现」的口径。"
         />
       )}
+
+      {(() => {
+        const days = daysSince(analysis.snapshot.importedAt)
+        return days != null && days >= 7 ? (
+          <Alert
+            style={{ marginBottom: 16 }}
+            type="warning"
+            showIcon
+            message={`距上次导入已 ${days} 天`}
+            description="净增与涨跌榜依赖定期导入的快照对比，建议每周从创作者后台导出一次数据，保持分析连续性。"
+          />
+        ) : null
+      })()}
 
       <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
         {increments && (

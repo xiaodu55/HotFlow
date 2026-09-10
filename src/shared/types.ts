@@ -46,8 +46,18 @@ export interface Totals {
   /** (赞+评+转+藏)/播放 × 100 */
   engagementRate: number
   avgPlays: number
+  /** 播放量中位数（仅统计播放 >0 的视频）——平均会骗人，中位数才是真实水位 */
+  medianPlays: number
   completionRate: number | null
 }
+
+/** 播放水位标准（用于内容分级） */
+export interface PlayLevels {
+  medianPlays: number
+  avgEngagementRate: number
+}
+
+export type VideoGrade = '爆款' | '优质' | '正常' | '低效'
 
 export type DeltaDirection = 'up' | 'down' | 'flat'
 
@@ -92,6 +102,14 @@ export interface AnalysisResult {
   compareSnapshot: SnapshotMeta | null
   generatedAt: string
   totals: Totals
+  /** 本期视频发布时间的最早/最晚日期（统计周期），无发布时间时为 null */
+  periodRange: { from: string | null; to: string | null }
+  /** 播放水位标准（中位数播放 + 平均互动率），样本不足时为 null */
+  levels: PlayLevels | null
+  /** 视频内容等级（id → 爆款/优质/正常/低效） */
+  grades: Record<string, VideoGrade>
+  /** 各等级条数统计 */
+  gradeCounts: Record<string, number>
   /** 对比期的整体指标，无对比时为 null */
   prevTotals: Totals | null
   deltas: Deltas | null
@@ -191,6 +209,10 @@ export interface DiagnosisResult {
   generatedAt: string
   /** 诊断后的追问对话记录 */
   conversation?: Array<{ question: string; answer: string }>
+  /** 上期建议复盘（存在上期诊断时生成） */
+  retrospective?: string[]
+  /** 所复盘的上期诊断生成时间 */
+  previousGeneratedAt?: string
 }
 
 export type LlmProviderId = 'deepseek' | 'zhipu' | 'dashscope' | 'custom'

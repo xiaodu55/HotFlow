@@ -156,6 +156,27 @@ export default function DiagnosisPage({
               <>
                 {listBlock('爆款共性', diagnosis.hotPatterns, '#34d399')}
                 {listBlock('低效视频归因', diagnosis.weakPatterns, '#f87171')}
+                {diagnosis.retrospective && diagnosis.retrospective.length > 0 && (
+                  <Card
+                    size="small"
+                    title={
+                      <span style={{ color: '#a78bfa' }}>
+                        上期建议复盘{diagnosis.previousGeneratedAt ? `（对比 ${diagnosis.previousGeneratedAt.replace('T', ' ').slice(0, 16)} 的诊断）` : ''}
+                      </span>
+                    }
+                    style={{ marginBottom: 16 }}
+                  >
+                    <List
+                      size="small"
+                      dataSource={diagnosis.retrospective}
+                      renderItem={(item) => (
+                        <List.Item style={{ padding: '6px 0' }}>
+                          <Typography.Text style={{ whiteSpace: 'pre-wrap' }}>{item}</Typography.Text>
+                        </List.Item>
+                      )}
+                    />
+                  </Card>
+                )}
                 {diagnosis.titleNotes && (
                   <Card size="small" title="标题 / 封面诊断" style={{ marginBottom: 16 }}>
                     <Typography.Paragraph style={{ marginBottom: 0 }}>{diagnosis.titleNotes}</Typography.Paragraph>

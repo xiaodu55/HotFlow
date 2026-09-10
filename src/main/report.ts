@@ -78,6 +78,16 @@ function listSection(title: string, items: string[], cls: string): string {
 }
 
 /** 两期整体指标对比表（环比明细） */
+/** 内容等级分布说明（爆款/优质/正常/低效条数与水位标准） */
+function gradeDistributionHtml(analysis: AnalysisResult): string {
+  const levels = analysis.levels
+  if (!levels) return ''
+  const c = analysis.gradeCounts
+  return `<p class="insight" style="margin-bottom:14px">📌 内容分级（水位：播放中位数 <b>${fmtNum(levels.medianPlays)}</b>、平均互动率 <b>${levels.avgEngagementRate.toFixed(1)}%</b>）：
+  爆款 <b>${c['爆款'] ?? 0}</b> 条 · 优质 <b>${c['优质'] ?? 0}</b> 条 · 正常 <b>${c['正常'] ?? 0}</b> 条 · 低效 <b>${c['低效'] ?? 0}</b> 条。
+  分级规则：爆款=播放≥中位数×2 且互动率高于平均；低效=播放<中位数÷2。</p>`
+}
+
 function deltaTableHtml(analysis: AnalysisResult): string {
   const { totals, prevTotals, deltas } = analysis
   if (!prevTotals || !deltas) return ''
@@ -253,6 +263,7 @@ export function buildReportHtml(analysis: AnalysisResult, diagnosis: DiagnosisRe
     <h1>HotFlow 视频运营分析报告</h1>
     <div class="meta">
       数据来源：${esc(analysis.snapshot.platformLabel)} · <b>${accountLabel}</b>${noteLabel} · ${esc(analysis.snapshot.fileName)}（${analysis.snapshot.recordCount} 条视频）<br>
+      统计周期：${analysis.periodRange.from && analysis.periodRange.to ? `${esc(analysis.periodRange.from)} ~ ${esc(analysis.periodRange.to)}（按发布时间）` : '—'}<br>
       导入时间：${esc(fmtTime(analysis.snapshot.importedAt))} · 报告生成：${esc(fmtTime(analysis.generatedAt))}<br>
       ${compareNote}
     </div>
@@ -260,13 +271,13 @@ export function buildReportHtml(analysis: AnalysisResult, diagnosis: DiagnosisRe
 
   <div class="card">
     <h3>核心指标${deltas ? '' : '（暂无上期环比）'}</h3>
-    ${
-      increments
-        ? `<p class="insight" style="margin-bottom:14px">📌 净增口径（同名视频累计差求和）：本期净增播放 <b>${fmtNum(increments.plays)}</b>、净增点赞 <b>${fmtNum(increments.likes)}</b>${
-            increments.followsGained != null ? `、净增涨粉 <b>${fmtNum(increments.followsGained)}</b>` : ''
-          }（匹配 ${increments.matched} 条视频）。下方总量含历史存量，环比箭头反映累计口径。</p>`
-        : ''
+    ${increments
+      ? `<p class="insight" style="margin-bottom:14px">📌 净增口径（同名视频累计差求和）：本期净增播放 <b>${fmtNum(increments.plays)}</b>、净增点赞 <b>${fmtNum(increments.likes)}</b>${
+          increments.followsGained != null ? `、净增涨粉 <b>${fmtNum(increments.followsGained)}</b>` : ''
+        }（匹配 ${increments.matched} 条视频）。下方总量含历史存量，环比箭头反映累计口径。</p>`
+      : ''
     }
+    ${gradeDistributionHtml(analysis)}
     <div class="kpi-grid">
       ${kpiCard('总播放', fmtNum(totals.plays), deltas?.plays)}
       ${kpiCard('篇均播放', fmtNum(totals.avgPlays), deltas?.avgPlays)}

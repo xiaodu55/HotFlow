@@ -10,6 +10,14 @@ export const fmtPct = (n: number | null | undefined): string =>
 export const fmtTime = (iso: string | null | undefined): string =>
   iso ? iso.replace('T', ' ').slice(0, 16) : '—'
 
+/** 距今多少天（按自然日粗算），无法解析返回 null */
+export function daysSince(iso: string | null | undefined): number | null {
+  if (!iso) return null
+  const t = Date.parse(iso)
+  if (Number.isNaN(t)) return null
+  return Math.max(0, Math.floor((Date.now() - t) / 86400000))
+}
+
 export function fmtDuration(sec: number | null | undefined): string {
   if (sec == null) return '—'
   if (sec < 60) return `${Math.round(sec)}秒`

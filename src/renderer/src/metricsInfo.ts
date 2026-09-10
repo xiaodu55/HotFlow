@@ -54,6 +54,11 @@ export const METRIC_INFO: Record<string, MetricInfo> = {
     formula: '总播放量 ÷ 视频条数',
     interpret: '平均每条视频拿到的播放，反映账号分发基本盘；跨期对比比总播放更公平（不受条数影响）'
   },
+  medianPlays: {
+    name: '中位数播放',
+    formula: '按播放量排序后位于正中间的视频的播放量（仅统计播放>0）',
+    interpret: '平均值会被个别爆款拉高，中位数才是账号的真实水位；爆款=播放≥中位数×2 且互动率高于平均'
+  },
   videoCount: {
     name: '视频总数',
     formula: '本期导入表格中的视频条数'

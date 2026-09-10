@@ -5,6 +5,7 @@ import { ExportOutlined } from '@ant-design/icons'
 import type { AnalysisResult, Snapshot, VideoRecord } from '@shared/types'
 import { engagementRateOf } from '@shared/metrics'
 import { metricTooltip } from '../metricsInfo'
+import { daysSince } from '../utils'
 import PageHeader from '../components/PageHeader'
 import { fmtDuration, fmtNum, fmtPct, fmtTime } from '../utils'
 
@@ -83,8 +84,35 @@ export default function VideosPage({ snapshot, analysis }: Props) {
         </Typography.Text>
       )
     },
+    {
+      title: '等级',
+      key: 'grade',
+      width: 84,
+      filters: [
+        { text: '爆款', value: '爆款' },
+        { text: '优质', value: '优质' },
+        { text: '正常', value: '正常' },
+        { text: '低效', value: '低效' }
+      ],
+      onFilter: (value: unknown, r: VideoRecord) => (analysis?.grades[r.id] ?? '正常') === value,
+      render: (_: unknown, r: VideoRecord) => {
+        const g = analysis?.grades[r.id] ?? '正常'
+        const color = g === '爆款' ? 'gold' : g === '优质' ? 'green' : g === '低效' ? 'red' : 'default'
+        return <Tag color={color}>{g}</Tag>
+      }
+    },
     { title: '发布时间', dataIndex: 'publishTime', width: 140, render: fmtTime },
-    { title: headWithTip('时长', '视频长度；悬停数值行可见原始格式'), dataIndex: 'durationSec', width: 90, render: fmtDuration },
+    {
+      title: '发布至今',
+      key: 'age',
+      width: 92,
+      sorter: (a: VideoRecord, b: VideoRecord) => (daysSince(a.publishTime) ?? -1) - (daysSince(b.publishTime) ?? -1),
+      render: (_: unknown, r: VideoRecord) => {
+        const d = daysSince(r.publishTime)
+        return d == null ? '—' : `${d} 天`
+      }
+    },
+    { title: '时长', dataIndex: 'durationSec', width: 90, render: fmtDuration },
     {
       title: headWithTip('播放量', metricTooltip('plays')),
       dataIndex: 'plays',
@@ -178,14 +206,15 @@ export default function VideosPage({ snapshot, analysis }: Props) {
         }
       />
       <Card size="small" styles={{ body: { paddingTop: 12 } }}>
-        <Table<VideoRecord>
-          rowKey="id"
-          dataSource={data}
-          columns={columns}
-          size={density}
-          pagination={{ pageSize: 20, showSizeChanger: false, showTotal: (t) => `共 ${t} 条` }}
-          rowClassName={(r) => (topIds.has(r.id) ? 'row-top' : bottomIds.has(r.id) ? 'row-bottom' : '')}
-        />
+      <Table<VideoRecord>
+        rowKey="id"
+        dataSource={data}
+        columns={columns}
+        size={density}
+        scroll={{ x: 1240 }}
+        pagination={{ pageSize: 20, showSizeChanger: false, showTotal: (t) => `共 ${t} 条` }}
+        rowClassName={(r) => (topIds.has(r.id) ? 'row-top' : bottomIds.has(r.id) ? 'row-bottom' : '')}
+      />
       </Card>
     </div>
   )

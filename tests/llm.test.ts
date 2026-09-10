@@ -51,4 +51,14 @@ describe('parseDiagnosis（LLM 输出容错解析）', () => {
     expect(d.adviceTopics).toHaveLength(0)
     expect(d.summary).toBe('整体向好')
   })
+
+  it('含 retrospective 字段时保留（策略闭环）', () => {
+    const d = parseDiagnosis(JSON.stringify({ ...base, retrospective: ['上期建议晚8点发布已验证有效'] }), 'm')
+    expect(d.retrospective).toEqual(['上期建议晚8点发布已验证有效'])
+  })
+
+  it('无 retrospective 字段时为 undefined（首期诊断）', () => {
+    const d = parseDiagnosis(JSON.stringify(base), 'm')
+    expect(d.retrospective).toBeUndefined()
+  })
 })

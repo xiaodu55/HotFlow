@@ -6,6 +6,7 @@ import type {
   HourStat,
   Increments,
   IncrementPoint,
+  PlayLevels,
   Snapshot,
   SnapshotMeta,
   TitleAnalysis,
@@ -14,6 +15,7 @@ import type {
   TrendBucket,
   VideoDiff,
   VideoDiffsResult,
+  VideoGrade,
   VideoRecord
 } from './types'
 
@@ -64,8 +66,50 @@ export function computeTotals(records: VideoRecord[]): Totals {
     followsGained: hasFollows ? follows : null,
     engagementRate: plays ? round2(((likes + comments + shares + collects) / plays) * 100) : 0,
     avgPlays: videoCount ? round2(plays / videoCount) : 0,
+    medianPlays: medianPlaysOf(records),
     completionRate: completionCount ? round2(completionSum / completionCount) : null
   }
+}
+
+/** 播放量中位数：只统计播放 >0 的视频（0 播放通常是未分发，不算水位样本） */
+export function medianPlaysOf(records: VideoRecord[]): number {
+  const list = records.map((r) => r.plays).filter((p) => p > 0).sort((a, b) => a - b)
+  if (list.length === 0) return 0
+  const mid = Math.floor(list.length / 2)
+  return list.length % 2 ? list[mid] : round2((list[mid - 1] + list[mid]) / 2)
+}
+
+/** 播放水位标准：中位数播放 + 整体互动率（样本 <4 条时不构成水位） */
+export function computeLevels(records: VideoRecord[]): PlayLevels | null {
+  if (records.length < 4) return null
+  const median = medianPlaysOf(records)
+  if (median <= 0) return null
+  return { medianPlays: median, avgEngagementRate: computeTotals(records).engagementRate }
+}
+
+/** 内容分级：爆款 = 播放 ≥ 中位数×2 且互动率高于平均；低效 = 播放 < 中位数÷2 */
+export function gradeVideo(r: VideoRecord, levels: PlayLevels | null): VideoGrade {
+  if (!levels || levels.medianPlays <= 0 || r.plays <= 0) return '正常'
+  if (r.plays >= levels.medianPlays * 2) {
+    return engagementRateOf(r) > levels.avgEngagementRate ? '爆款' : '优质'
+  }
+  if (r.plays < levels.medianPlays / 2) return '低效'
+  return '正常'
+}
+
+/** 全量分级（id → 等级）+ 各等级条数 */
+export function gradeAll(
+  records: VideoRecord[],
+  levels: PlayLevels | null
+): { grades: Record<string, VideoGrade>; gradeCounts: Record<string, number> } {
+  const grades: Record<string, VideoGrade> = {}
+  const gradeCounts: Record<string, number> = { 爆款: 0, 优质: 0, 正常: 0, 低效: 0 }
+  for (const r of records) {
+    const g = gradeVideo(r, levels)
+    grades[r.id] = g
+    gradeCounts[g] = (gradeCounts[g] ?? 0) + 1
+  }
+  return { grades, gradeCounts }
 }
 
 function makeDelta(cur: number, prev: number): Delta {
@@ -392,6 +436,14 @@ function toMeta(s: Snapshot): SnapshotMeta {
   return meta
 }
 
+/** 本期视频发布时间范围（统计周期），无发布时间时为 null */
+export function computePeriodRange(records: VideoRecord[]): { from: string | null; to: string | null } {
+  const days = records.map((r) => r.publishTime?.slice(0, 10)).filter((d): d is string => Boolean(d))
+  if (days.length === 0) return { from: null, to: null }
+  const sorted = [...days].sort()
+  return { from: sorted[0], to: sorted[sorted.length - 1] }
+}
+
 /** 按复合键（标题+发布日）匹配两期视频，计算播放/互动涨跌 */
 export function computeVideoDiffs(cur: VideoRecord[], prev: VideoRecord[]): VideoDiffsResult {
   const prevByKey = new Map<string, VideoRecord>()
@@ -433,11 +485,17 @@ export function runAnalysis(
   const { topByPlays, bottomByPlays, topByEngagement, bottomByEngagement } = rankRecords(records)
   const { granularity, buckets } = computeTrend(records)
   const prevTotals = compare ? computeTotals(compare.records) : null
+  const levels = computeLevels(records)
+  const { grades, gradeCounts } = gradeAll(records, levels)
   return {
     snapshot: meta,
     compareSnapshot: compare ? toMeta(compare) : null,
     generatedAt: new Date().toISOString(),
     totals,
+    periodRange: computePeriodRange(records),
+    levels,
+    grades,
+    gradeCounts,
     prevTotals,
     deltas: prevTotals ? computeDeltas(totals, prevTotals) : null,
     increments: compare ? computeIncrements(records, compare.records) : null,

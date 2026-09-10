@@ -4,12 +4,14 @@ import {
   computeHourStats,
   computeIncrements,
   computeIncrementTrend,
+  computePeriodRange,
   computeTotals,
   computeTrend,
   computeVideoDiffs,
   analyzeTitles,
   engagementRateOf,
   findSuspicious,
+  gradeVideo,
   runAnalysis
 } from '../src/shared/metrics'
 import { matchColumns } from '../src/shared/normalize'
@@ -140,6 +142,76 @@ describe('matchColumns', () => {
   })
 })
 
+describe('内容分级（水位线）', () => {
+  const records = [
+    rec({ id: 'a', title: '爆款', plays: 5000, likes: 300, comments: 50 }), // 互动率 7%
+    rec({ id: 'b', title: '优质', plays: 4000, likes: 100 }),
+    rec({ id: 'c', title: '正常1', plays: 2000, likes: 50 }),
+    rec({ id: 'd', title: '正常2', plays: 1000, likes: 20 }),
+    rec({ id: 'e', title: '低效', plays: 200, likes: 2 })
+  ] // 播放>0 中位数 = 2000
+
+  it('中位数只统计播放>0的视频', () => {
+    const totals = computeTotals([...records, rec({ id: 'z', title: '零播放', plays: 0 })])
+    expect(totals.medianPlays).toBe(2000)
+  })
+
+  it('爆款 = 播放≥中位数×2 且互动率高于平均', () => {
+    const levels = computeTotals(records.slice(0, 4))
+    expect(gradeVideo(records[0], { medianPlays: 2000, avgEngagementRate: levels.engagementRate })).toBe('爆款')
+  })
+
+  it('播放高但互动率低于平均 → 优质而非爆款', () => {
+    expect(gradeVideo(rec({ plays: 5000, likes: 10 }), { medianPlays: 2000, avgEngagementRate: 7 })).toBe('优质')
+  })
+
+  it('播放 < 中位数÷2 → 低效', () => {
+    expect(gradeVideo(rec({ plays: 200, likes: 5 }), { medianPlays: 2000, avgEngagementRate: 5 })).toBe('低效')
+  })
+
+  it('样本不足或中位数为 0 时不分级', () => {
+    expect(gradeVideo(rec({ plays: 999 }), null)).toBe('正常')
+    expect(gradeVideo(rec({ plays: 999 }), { medianPlays: 0, avgEngagementRate: 0 })).toBe('正常')
+  })
+
+  it('runAnalysis 返回 periodRange 与等级分布', () => {
+    const snap = (id: string, records: VideoRecord[]): Snapshot => ({
+      id,
+      platform: 'douyin',
+      platformLabel: '抖音',
+      account: '',
+      note: '',
+      fileName: `${id}.xlsx`,
+      importedAt: id,
+      recordCount: records.length,
+      warnings: [],
+      unmappedColumns: [],
+      records
+    })
+    const result = runAnalysis(snap('x', records), null)
+    expect(result.periodRange).toEqual({ from: null, to: null })
+    const withTime = runAnalysis(
+      snap('y', [rec({ id: 'v1', publishTime: '2026-08-05 10:00:00', plays: 100 }), rec({ id: 'v2', publishTime: '2026-08-01 10:00:00', plays: 100 })]),
+      null
+    )
+    expect(withTime.periodRange).toEqual({ from: '2026-08-01', to: '2026-08-05' })
+    expect(Object.keys(withTime.grades)).toHaveLength(2)
+    expect(Object.values(withTime.gradeCounts).reduce((a, b) => a + b, 0)).toBe(2)
+  })
+})
+
+describe('computePeriodRange', () => {
+  it('返回发布日期的最小/最大值', () => {
+    expect(
+      computePeriodRange([
+        rec({ publishTime: '2026-08-05 10:00:00' }),
+        rec({ publishTime: '2026-08-01 09:00:00' }),
+        rec({ publishTime: null })
+      ])
+    ).toEqual({ from: '2026-08-01', to: '2026-08-05' })
+    expect(computePeriodRange([rec({ publishTime: null })])).toEqual({ from: null, to: null })
+  })
+})
 describe('computeVideoDiffs', () => {
   it('按标题匹配两期并计算涨跌', () => {
     const cur = [

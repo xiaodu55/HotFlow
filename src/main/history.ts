@@ -54,6 +54,22 @@ export async function saveDiagnosis(id: string, diagnosis: DiagnosisResult): Pro
   await writeFile(diagnosisFile(id), JSON.stringify(diagnosis), 'utf-8')
 }
 
+const ARCHIVE_CAP = 10
+
+/** 重新生成诊断前归档旧诊断（每份快照最多保留 10 份历史） */
+export async function archiveDiagnosis(id: string, diagnosis: DiagnosisResult): Promise<void> {
+  await ensureHistoryDir()
+  const file = join(historyDir(), `${id}.diagnosis-archive.json`)
+  let list: DiagnosisResult[] = []
+  try {
+    list = JSON.parse(await readFile(file, 'utf-8')) as DiagnosisResult[]
+  } catch {
+    list = []
+  }
+  list.unshift(diagnosis)
+  await writeFile(file, JSON.stringify(list.slice(0, ARCHIVE_CAP)), 'utf-8')
+}
+
 export async function loadDiagnosis(id: string): Promise<DiagnosisResult | null> {
   try {
     return JSON.parse(await readFile(diagnosisFile(id), 'utf-8')) as DiagnosisResult

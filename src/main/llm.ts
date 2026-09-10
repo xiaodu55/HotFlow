@@ -3,24 +3,41 @@ import { analyzeTitles, engagementRateOf } from '@shared/metrics'
 import type { AnalysisResult, DiagnosisResult, LlmConfig, Snapshot, VideoRecord } from '@shared/types'
 
 const SYSTEM_PROMPT = `你是一名资深短视频运营专家，负责分析账号的视频数据并给出可执行的运营建议。
-用户会提供一份 JSON 数据，包含整体指标、环比变化、发布趋势、分时段表现、时长表现，以及表现最好/最差的视频明细。
+用户会提供一份 JSON 数据，包含整体指标、环比变化、净增口径、发布趋势、分时段表现、时长表现、内容等级分组（爆款/优质/正常/低效，按播放中位数与平均互动率划分），以及表现最好/最差的视频明细。
 
 请只输出一个 JSON 对象，不要输出任何其他文本、解释或 markdown 代码块。JSON 结构如下：
 {
   "summary": "一段 80 字以内的整体表现总结，要引用关键数字",
-  "hotPatterns": ["表现好的视频的共性规律，3-5 条，每条引用具体数据佐证"],
-  "weakPatterns": ["表现差的视频的问题归因，3-5 条，每条引用具体数据佐证"],
+  "hotPatterns": ["爆款组和优质组视频的共性规律，3-5 条，引用具体数据佐证"],
+  "weakPatterns": ["低效组和正常组中表现偏差视频的问题归因，3-5 条，引用具体数据佐证"],
   "titleNotes": "针对标题和封面质量的具体诊断意见，一段话",
-  "advicePublishTime": ["基于分时段数据给出的发布时间建议，2-4 条"],
+  "advicePublishTime": ["基于分时段数据给出的发布时间建议，2-4 条，注意标注样本量不足的时段"],
   "adviceTopics": ["基于爆款共性给出的选题方向建议，3-5 条"],
   "adviceActions": ["接下来一周可以直接执行的动作清单，3-5 条，要具体"]
 }
-所有内容用中文。结论必须来自数据本身，不要编造数据里没有的信息；数据不足以得出结论时，如实说明。`
+分析要求：
+- 以内容等级分组为主要依据（爆款组共性 vs 低效组归因），播放 Top5 只是参考
+- 区分"新视频冷启动差"与"老视频长尾衰减"：发布至今天数短的视频不要轻易判为低效
+- 某个时段样本量不足 3 条时，不要基于它给出强结论
+所有内容用中文。结论必须来自数据本身，不要编造数据里没有的信息；数据不足以得出结论时，如实说明。
+
+如果用户数据中包含「上期诊断」，请额外在 JSON 中输出一个字段：
+"retrospective": ["对照上期建议与本期数据的复盘结论，2-4 条：说明上期哪些建议在本期数据中得到验证、哪些无效、哪些未见执行，引用数据佐证"]
+没有「上期诊断」时不要输出 retrospective 字段。`
+
+function daysSince(publishTime: string | null): number | null {
+  if (!publishTime) return null
+  const t = Date.parse(publishTime)
+  if (Number.isNaN(t)) return null
+  return Math.max(0, Math.floor((Date.now() - t) / 86400000))
+}
 
 function compactRecord(r: VideoRecord) {
+  const age = daysSince(r.publishTime)
   return {
     标题: r.title,
     发布时间: r.publishTime ? r.publishTime.slice(5, 16) : null,
+    发布至今天数: age,
     时长秒: r.durationSec,
     播放量: r.plays,
     互动率: engagementRateOf(r),
@@ -32,12 +49,21 @@ function compactRecord(r: VideoRecord) {
   }
 }
 
-function buildUserPayload(snapshot: Snapshot, analysis: AnalysisResult): string {
-  const titles = analyzeTitles(snapshot.records)
-  return JSON.stringify({
+function buildUserPayload(
+  snapshot: Snapshot,
+  analysis: AnalysisResult,
+  previous?: DiagnosisResult
+): string {
+  const levels = analysis.levels
+  const grades = analysis.grades
+  const byGrade = (grade: string, cap = 10): VideoRecord[] =>
+    snapshot.records.filter((r) => grades[r.id] === grade).slice(0, cap)
+
+  const payload: Record<string, unknown> = {
     平台: snapshot.platformLabel,
     账号: snapshot.account || '未命名账号',
     数据文件: snapshot.fileName,
+    统计周期: analysis.periodRange,
     视频总数: analysis.totals.videoCount,
     整体累计指标: analysis.totals,
     本期净增_同名视频累计差求和: analysis.increments,
@@ -46,12 +72,37 @@ function buildUserPayload(snapshot: Snapshot, analysis: AnalysisResult): string 
     发布趋势: analysis.trend,
     分时段表现: analysis.hourStats,
     时长表现: analysis.durationBuckets,
-    标题话题统计_含平均播放: titles.hashtags,
-    标题高频词_含平均播放: titles.topWords,
+    标题话题统计_含平均播放: analyzeTitles(snapshot.records).hashtags,
+    标题高频词_含平均播放: analyzeTitles(snapshot.records).topWords,
     播放量最高: analysis.topByPlays.slice(0, 8).map(compactRecord),
     播放量最低: analysis.bottomByPlays.slice(0, 8).map(compactRecord),
     互动率最高: analysis.topByEngagement.slice(0, 5).map(compactRecord)
-  })
+  }
+
+  if (levels) {
+    payload.水位标准 = {
+      播放中位数: levels.medianPlays,
+      平均互动率: levels.avgEngagementRate,
+      分级规则: '爆款=播放≥中位数×2且互动率高于平均；优质=播放≥中位数×2；低效=播放<中位数÷2'
+    }
+    payload.爆款组 = byGrade('爆款', 10).map(compactRecord)
+    payload.低效组 = byGrade('低效', 10).map(compactRecord)
+    payload.优质组 = byGrade('优质', 10).map(compactRecord)
+  }
+
+  if (previous) {
+    payload.上期诊断 = {
+      生成时间: previous.generatedAt,
+      总结: previous.summary,
+      爆款共性: previous.hotPatterns,
+      低效归因: previous.weakPatterns,
+      发布时间建议: previous.advicePublishTime,
+      选题建议: previous.adviceTopics,
+      行动清单: previous.adviceActions
+    }
+  }
+
+  return JSON.stringify(payload)
 }
 
 /** 从模型输出中尽力提取 JSON（容忍 markdown 代码块和前后缀文字） */
@@ -87,6 +138,7 @@ export function parseDiagnosis(text: string, model: string): DiagnosisResult {
       advicePublishTime: asStringArray(j.advicePublishTime),
       adviceTopics: asStringArray(j.adviceTopics),
       adviceActions: asStringArray(j.adviceActions),
+      retrospective: j.retrospective != null ? asStringArray(j.retrospective) : undefined,
       model,
       generatedAt
     }
@@ -131,7 +183,8 @@ export async function runDiagnosis(
   cfg: LlmConfig,
   snapshot: Snapshot,
   analysis: AnalysisResult,
-  onChunk?: (text: string) => void
+  onChunk?: (text: string) => void,
+  previous?: DiagnosisResult | null
 ): Promise<DiagnosisResult> {
   if (!isLlmConfigured(cfg)) throw new Error('尚未配置大模型，请先到「设置」页填写 API Key')
   const client = new OpenAI({ apiKey: cfg.apiKey.trim(), baseURL: cfg.baseURL.trim() })
@@ -139,7 +192,7 @@ export async function runDiagnosis(
     model: cfg.model.trim(),
     messages: [
       { role: 'system', content: SYSTEM_PROMPT },
-      { role: 'user', content: buildUserPayload(snapshot, analysis) }
+      { role: 'user', content: buildUserPayload(snapshot, analysis, previous ?? undefined) }
     ],
     stream: true,
     temperature: 0.4
@@ -153,7 +206,12 @@ export async function runDiagnosis(
       onChunk?.(delta)
     }
   }
-  return parseDiagnosis(full, cfg.model)
+  const diagnosis = parseDiagnosis(full, cfg.model)
+  if (previous) {
+    diagnosis.retrospective = diagnosis.retrospective ?? []
+    diagnosis.previousGeneratedAt = previous.generatedAt
+  }
+  return diagnosis
 }
 
 const FOLLOWUP_SYSTEM = `你是资深短视频运营专家。此前你已经基于该账号的视频运营数据输出过一份诊断报告。
