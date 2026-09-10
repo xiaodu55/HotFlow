@@ -1,6 +1,7 @@
 import { readFileSync } from 'fs'
 import { dirname, join } from 'path'
 import { engagementRateOf } from '@shared/metrics'
+import { logWarn } from './logger'
 import type { AnalysisResult, DiagnosisResult, VideoDiff, VideoRecord } from '@shared/types'
 
 /** 优先内联本地 echarts.min.js，打包后也能离线打开；失败时退回 CDN */
@@ -8,7 +9,8 @@ function loadEchartsJs(): string {
   try {
     const pkgPath = require.resolve('echarts/package.json')
     return readFileSync(join(dirname(pkgPath), 'dist', 'echarts.min.js'), 'utf-8')
-  } catch {
+  } catch (err) {
+    logWarn('report:loadEchartsJs', err)
     return ''
   }
 }

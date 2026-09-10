@@ -2,6 +2,7 @@ import { app } from 'electron'
 import { join } from 'path'
 import { readFile, writeFile } from 'fs/promises'
 import { DEFAULT_LLM_CONFIG } from '@shared/llm-presets'
+import { logWarn } from './logger'
 import type { AppSettings } from '@shared/types'
 
 function settingsFile(): string {
@@ -18,7 +19,9 @@ export async function loadSettings(): Promise<AppSettings> {
       llm: { ...DEFAULT_LLM_CONFIG, ...(parsed.llm ?? {}) },
       windowBounds: parsed.windowBounds
     }
-  } catch {
+  } catch (err) {
+    // 首次启动/文件缺失属正常路径，损坏时留下日志便于排查
+    logWarn('settings:loadSettings', err)
     return { ...DEFAULT_SETTINGS, llm: { ...DEFAULT_LLM_CONFIG } }
   }
 }

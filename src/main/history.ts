@@ -1,6 +1,7 @@
 import { unlink, readdir, readFile, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { ensureHistoryDir, historyDir } from './paths'
+import { logWarn } from './logger'
 import type { DiagnosisResult, Snapshot, SnapshotMeta } from '@shared/types'
 
 function snapshotFile(id: string): string {
@@ -40,8 +41,9 @@ export async function listSnapshots(): Promise<SnapshotMeta[]> {
       void records
       // 旧版快照无 account/note 字段，读取时兜底
       metas.push({ account: '', note: '', ...meta } as SnapshotMeta)
-    } catch {
+    } catch (err) {
       // 单个损坏文件不影响整体列表
+      logWarn('history:listSnapshots', err)
     }
   }
   return metas.sort((a, b) => (a.importedAt < b.importedAt ? 1 : -1))
@@ -51,7 +53,8 @@ export async function loadSnapshot(id: string): Promise<Snapshot | null> {
   try {
     const parsed = JSON.parse(await readFile(snapshotFile(id), 'utf-8')) as Partial<Snapshot>
     return { account: '', note: '', ...parsed } as Snapshot
-  } catch {
+  } catch (err) {
+    logWarn('history:loadSnapshot', err)
     return null
   }
 }
@@ -76,7 +79,8 @@ export async function archiveDiagnosis(id: string, diagnosis: DiagnosisResult): 
   let list: DiagnosisResult[] = []
   try {
     list = JSON.parse(await readFile(file, 'utf-8')) as DiagnosisResult[]
-  } catch {
+  } catch (err) {
+    logWarn('history:archiveDiagnosis', err)
     list = []
   }
   list.unshift(diagnosis)
@@ -86,7 +90,8 @@ export async function archiveDiagnosis(id: string, diagnosis: DiagnosisResult): 
 export async function loadDiagnosis(id: string): Promise<DiagnosisResult | null> {
   try {
     return JSON.parse(await readFile(diagnosisFile(id), 'utf-8')) as DiagnosisResult
-  } catch {
+  } catch (err) {
+    logWarn('history:loadDiagnosis', err)
     return null
   }
 }

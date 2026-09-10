@@ -1,5 +1,6 @@
 import OpenAI from 'openai'
 import { analyzeTitles, engagementRateOf } from '@shared/metrics'
+import { logWarn } from './logger'
 import type { AnalysisResult, DiagnosisResult, LlmConfig, Snapshot, VideoRecord } from '@shared/types'
 
 const SYSTEM_PROMPT = `你是一名资深短视频运营专家，负责分析账号的视频数据并给出可执行的运营建议。
@@ -193,7 +194,8 @@ export function parseDiagnosis(text: string, model: string): DiagnosisResult {
       model,
       generatedAt
     }
-  } catch {
+  } catch (err) {
+    logWarn('llm:parseDiagnosis', err)
     return {
       summary: '模型输出未能解析为结构化结果，以下为原始输出。',
       hotPatterns: [],

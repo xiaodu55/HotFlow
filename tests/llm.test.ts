@@ -1,6 +1,12 @@
-import { describe, expect, it } from 'vitest'
+import { tmpdir } from 'os'
+import { describe, expect, it, vi } from 'vitest'
 import { adviceExecution, extractAdvisedHours, parseDiagnosis } from '../src/main/llm'
 import type { DiagnosisResult, Snapshot, VideoRecord } from '../src/shared/types'
+
+// llm.ts 间接引入 logger → electron，测试环境指向系统临时目录
+vi.mock('electron', () => ({
+  app: { getPath: vi.fn(() => tmpdir()) }
+}))
 
 describe('parseDiagnosis（LLM 输出容错解析）', () => {
   const base = {

@@ -1,7 +1,13 @@
-import { describe, expect, it } from 'vitest'
+import { tmpdir } from 'os'
+import { describe, expect, it, vi } from 'vitest'
 import { runAnalysis } from '../src/shared/metrics'
 import type { Snapshot, VideoRecord } from '../src/shared/types'
 import { buildReportHtml, deltaTableHtml } from '../src/main/report'
+
+// report.ts 间接引入 logger → electron，测试环境指向系统临时目录
+vi.mock('electron', () => ({
+  app: { getPath: vi.fn(() => tmpdir()) }
+}))
 
 function rec(partial: Partial<VideoRecord>): VideoRecord {
   return {
