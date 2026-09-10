@@ -25,7 +25,13 @@ const api: Api = {
   exportBackup: () => ipcRenderer.invoke('app:exportBackup'),
   importBackup: () => ipcRenderer.invoke('app:importBackup'),
   loadSampleData: () => ipcRenderer.invoke('app:loadSampleData'),
-  getStrategyReview: (snapshotId) => ipcRenderer.invoke('app:getStrategyReview', snapshotId)
+  getStrategyReview: (snapshotId) => ipcRenderer.invoke('app:getStrategyReview', snapshotId),
+  getVideoTags: () => ipcRenderer.invoke('app:getVideoTags'),
+  setVideoTags: (key, tags) => ipcRenderer.invoke('app:setVideoTags', key, tags),
+  listTopics: () => ipcRenderer.invoke('app:listTopics'),
+  addTopic: (text, source) => ipcRenderer.invoke('app:addTopic', text, source),
+  updateTopic: (id, status) => ipcRenderer.invoke('app:updateTopic', id, status),
+  deleteTopic: (id) => ipcRenderer.invoke('app:deleteTopic', id)
 }
 
 contextBridge.exposeInMainWorld('api', api)

@@ -7,7 +7,10 @@ import type {
   Snapshot,
   SnapshotMeta,
   StrategyReview,
-  TableInspect
+  TableInspect,
+  Topic,
+  TopicStatus,
+  VideoTagMap
 } from './types'
 
 /** preload 暴露到 window.api 的类型安全接口，主进程按同名 channel 实现 */
@@ -44,4 +47,16 @@ export interface Api {
   loadSampleData(): Promise<{ count: number }>
   /** 看板「策略复盘」卡片：上期建议与本期复盘结论（无上期诊断时 previous 为 null） */
   getStrategyReview(snapshotId: string): Promise<StrategyReview>
+  /** 全部视频标签（键为 matchKeyOf，跨期稳定） */
+  getVideoTags(): Promise<VideoTagMap>
+  /** 设置一个视频键的标签（清空数组即删除该键），返回最新全量标签 */
+  setVideoTags(key: string, tags: string[]): Promise<VideoTagMap>
+  /** 选题库列表（新→旧） */
+  listTopics(): Promise<Topic[]>
+  /** 新增选题（同文本去重），返回最新列表 */
+  addTopic(text: string, source?: 'ai' | 'manual'): Promise<Topic[]>
+  /** 更新选题状态 */
+  updateTopic(id: string, status: TopicStatus): Promise<Topic[]>
+  /** 删除选题 */
+  deleteTopic(id: string): Promise<Topic[]>
 }

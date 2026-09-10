@@ -204,6 +204,29 @@ export interface StrategyReview {
   previousGeneratedAt: string | null
 }
 
+/** 视频自定义标签：键为 matchKeyOf（标题+发布日），跨期稳定 */
+export type VideoTagMap = Record<string, string[]>
+
+/** 按标签聚合的表现统计（computeTagStats 产出） */
+export interface TagStat {
+  tag: string
+  count: number
+  totalPlays: number
+  avgPlays: number
+  avgEngagementRate: number
+}
+
+export type TopicStatus = 'open' | 'published' | 'dropped'
+
+/** 选题库条目：AI 建议/手动录入的待执行选题 */
+export interface Topic {
+  id: string
+  text: string
+  source: 'ai' | 'manual'
+  createdAt: string
+  status: TopicStatus
+}
+
 /** LLM 诊断与建议的结构化结果 */
 export interface DiagnosisResult {
   summary: string

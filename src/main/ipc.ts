@@ -2,7 +2,7 @@ import { BrowserWindow, app, dialog, ipcMain } from 'electron'
 import { readFile, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { computeIncrementTrend, computeIncrements, runAnalysis } from '@shared/metrics'
-import type { AnalysisResult, AppSettings, LlmConfig, Snapshot } from '@shared/types'
+import type { AnalysisResult, AppSettings, LlmConfig, Snapshot, TopicStatus } from '@shared/types'
 import { createBackup, restoreBackup } from './backup'
 import { importFromFile, inspectTable, type ImportMeta } from './ingest'
 import {
@@ -17,6 +17,7 @@ import {
   saveDiagnosis
 } from './history'
 import { askFollowUp, runDiagnosis, testLlm } from './llm'
+import { addTopic, deleteTopic, getVideoTags, listTopics, setVideoTags, updateTopic } from './annotations'
 import { buildReportHtml } from './report'
 import { loadSettings, saveSettings } from './settings'
 
@@ -167,6 +168,14 @@ export function registerIpc(): void {
       previousGeneratedAt: current?.previousGeneratedAt ?? null
     }
   })
+
+  // 运营标注：视频标签 + 选题库
+  ipcMain.handle('app:getVideoTags', () => getVideoTags())
+  ipcMain.handle('app:setVideoTags', (_e, key: string, tags: string[]) => setVideoTags(key, tags))
+  ipcMain.handle('app:listTopics', () => listTopics())
+  ipcMain.handle('app:addTopic', (_e, text: string, source?: 'ai' | 'manual') => addTopic(text, source ?? 'manual'))
+  ipcMain.handle('app:updateTopic', (_e, id: string, status: TopicStatus) => updateTopic(id, status))
+  ipcMain.handle('app:deleteTopic', (_e, id: string) => deleteTopic(id))
 
   ipcMain.handle('app:buildReport', async (_e, snapshotId: string, compareId?: string) => {
     const { analysis } = await getAnalysisBundle(snapshotId, compareId)

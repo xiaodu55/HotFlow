@@ -9,6 +9,7 @@ import type {
   PlayLevels,
   Snapshot,
   SnapshotMeta,
+  TagStat,
   TitleAnalysis,
   TitleTagStat,
   Totals,
@@ -16,7 +17,8 @@ import type {
   VideoDiff,
   VideoDiffsResult,
   VideoGrade,
-  VideoRecord
+  VideoRecord,
+  VideoTagMap
 } from './types'
 
 const round2 = (n: number): number => Math.round(n * 100) / 100
@@ -485,6 +487,31 @@ export function computeVideoDiffs(cur: VideoRecord[], prev: VideoRecord[]): Vide
       .reverse()
       .slice(0, 5)
   }
+}
+
+/** 按业务标签聚合表现（键为 matchKeyOf，跨期稳定）。无标签视频计入「未打标」便于对照，按篇均播放降序 */
+export function computeTagStats(records: VideoRecord[], tagMap: VideoTagMap): TagStat[] {
+  const acc = new Map<string, { count: number; plays: number; engSum: number }>()
+  for (const r of records) {
+    const tags = tagMap[matchKeyOf(r)] ?? []
+    const eng = engagementRateOf(r)
+    for (const tag of tags.length ? tags : ['未打标']) {
+      const cur = acc.get(tag) ?? { count: 0, plays: 0, engSum: 0 }
+      cur.count++
+      cur.plays += r.plays
+      cur.engSum += eng
+      acc.set(tag, cur)
+    }
+  }
+  return [...acc.entries()]
+    .map(([tag, v]) => ({
+      tag,
+      count: v.count,
+      totalPlays: v.plays,
+      avgPlays: Math.round(v.plays / v.count),
+      avgEngagementRate: round2(v.engSum / v.count)
+    }))
+    .sort((a, b) => b.avgPlays - a.avgPlays)
 }
 
 export function runAnalysis(

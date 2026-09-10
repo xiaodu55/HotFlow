@@ -13,6 +13,7 @@ import {
   findSuspicious,
   gradeVideo,
   matchKeyOf,
+  computeTagStats,
   runAnalysis
 } from '../src/shared/metrics'
 import { mapRecords, matchColumns } from '../src/shared/normalize'
@@ -345,6 +346,26 @@ describe('matchKeyOf（跨期匹配键）', () => {
     const withTime = rec({ title: '开学第一课', publishTime: '2026-09-01 10:00:00', durationSec: 30 })
     const noTime = rec({ title: '开学第一课', durationSec: 30 })
     expect(computeVideoDiffs([withTime], [noTime]).matched).toBe(0)
+  })
+})
+
+describe('computeTagStats（标签聚合）', () => {
+  it('按标签聚合篇均播放与互动率，无标签计入「未打标」', () => {
+    const records = [
+      rec({ title: 'A', publishTime: '2026-08-01', plays: 9000, likes: 900 }),
+      rec({ title: 'B', publishTime: '2026-08-02', plays: 1000, likes: 100 }),
+      rec({ title: 'C', publishTime: '2026-08-03', plays: 2000, likes: 20 })
+    ]
+    const stats = computeTagStats(records, {
+      [matchKeyOf(records[0])]: ['活动款'],
+      [matchKeyOf(records[1])]: ['活动款', '系列款']
+    })
+    const by = Object.fromEntries(stats.map((s) => [s.tag, s]))
+    expect(by['活动款']).toMatchObject({ count: 2, totalPlays: 10000, avgPlays: 5000, avgEngagementRate: 10 })
+    // C 无标签 + B 同时属于系列款 → 未打标只有 C
+    expect(by['未打标']).toMatchObject({ count: 1, avgPlays: 2000 })
+    expect(by['系列款'].count).toBe(1)
+    expect(stats[0].tag).toBe('活动款')
   })
 })
 
