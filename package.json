@@ -10,6 +10,12 @@
     "directories": {
       "output": "dist"
     },
+    "extraResources": [
+      {
+        "from": "samples",
+        "to": "samples"
+      }
+    ],
     "files": [
       "out/**"
     ],

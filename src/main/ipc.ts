@@ -1,5 +1,6 @@
-import { BrowserWindow, dialog, ipcMain } from 'electron'
+import { BrowserWindow, app, dialog, ipcMain } from 'electron'
 import { readFile, writeFile } from 'fs/promises'
+import { join } from 'path'
 import { computeIncrementTrend, computeIncrements, runAnalysis } from '@shared/metrics'
 import type { AppSettings, LlmConfig } from '@shared/types'
 import { createBackup, restoreBackup } from './backup'
@@ -172,5 +173,23 @@ export function registerIpc(): void {
     const raw = await readFile(res.filePaths[0], 'utf-8')
     const stats = await restoreBackup(raw)
     return { canceled: false, ...stats }
+  })
+
+  // 内置示例数据：打包后在 resources/samples，开发时在项目 samples/
+  const sampleDir = (): string =>
+    app.isPackaged ? join(process.resourcesPath, 'samples') : join(app.getAppPath(), 'samples')
+
+  ipcMain.handle('app:loadSampleData', async () => {
+    const outcomes = [
+      await importFromFile(join(sampleDir(), 'sample_douyin_period1.xlsx'), 'douyin', {
+        account: '示例账号',
+        note: '7月数据'
+      }),
+      await importFromFile(join(sampleDir(), 'sample_douyin_period2.xlsx'), 'douyin', {
+        account: '示例账号',
+        note: '8月数据'
+      })
+    ]
+    return { count: outcomes.length }
   })
 }

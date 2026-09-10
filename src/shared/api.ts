@@ -39,4 +39,6 @@ export interface Api {
   exportBackup(): Promise<{ canceled: boolean; path?: string; snapshots?: number }>
   /** 选择备份文件并恢复（同名覆盖、新增追加） */
   importBackup(): Promise<{ canceled: boolean; snapshots?: number; settings?: boolean }>
+  /** 加载内置示例数据（两期快照，账号「示例账号」），返回导入条数 */
+  loadSampleData(): Promise<{ count: number }>
 }

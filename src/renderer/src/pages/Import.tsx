@@ -107,6 +107,29 @@ export default function ImportPage({ snapshots, currentId, refresh, onOpen, onIm
     return m
   }, [inspect.data])
 
+  async function loadSamples() {
+    setImporting(true)
+    try {
+      const { count } = await window.api.loadSampleData()
+      await refresh()
+      message.success(`已加载 ${count} 份示例数据（示例账号 · 7月/8月）`)
+      const metas = await window.api.listSnapshots()
+      const latest = metas[0]
+      if (latest) onImported(latest.id)
+    } catch (err) {
+      message.error(`加载失败：${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  async function handleDelete(id: string) {
+    await window.api.deleteSnapshot(id)
+    if (id === currentId) onDeleteCurrent()
+    await refresh()
+    message.success('已删除')
+  }
+
   return (
     <div style={{ maxWidth: 980, margin: '0 auto' }}>
       <PageHeader title="导入数据" description="支持拖拽或点击选择，xlsx / xls / csv；导入前会预览列识别结果" />
@@ -201,16 +224,23 @@ export default function ImportPage({ snapshots, currentId, refresh, onOpen, onIm
 
       <Card title="导入历史" styles={{ body: { paddingTop: snapshots.length ? 8 : 24 } }}>
         {snapshots.length === 0 ? (
-          <Steps
-            direction="vertical"
-            size="small"
-            current={-1}
-            items={[
-              { title: '导出数据', description: '在平台创作者后台导出作品数据表（Excel 或 CSV）' },
-              { title: '拖入导入', description: '把文件拖到上方导入区，确认列映射后自动入库' },
-              { title: '看板与诊断', description: '在数据看板查看指标与环比，配置大模型后生成 AI 诊断' }
-            ]}
-          />
+          <>
+            <Steps
+              direction="vertical"
+              size="small"
+              current={-1}
+              items={[
+                { title: '导出数据', description: '在平台创作者后台导出作品数据表（Excel 或 CSV）' },
+                { title: '拖入导入', description: '把文件拖到上方导入区，确认列映射后自动入库' },
+                { title: '看板与诊断', description: '在数据看板查看指标与环比，配置大模型后生成 AI 诊断' }
+              ]}
+            />
+            <div style={{ textAlign: 'center', marginTop: 16 }}>
+              <Button loading={importing} onClick={() => void loadSamples()}>
+                或者，加载示例数据立即体验
+              </Button>
+            </div>
+          </>
         ) : (
           <Table<SnapshotMeta>
             rowKey="id"
@@ -244,12 +274,7 @@ export default function ImportPage({ snapshots, currentId, refresh, onOpen, onIm
                     </Button>
                     <Popconfirm
                       title="确定删除这份数据？"
-                      onConfirm={async () => {
-                        await window.api.deleteSnapshot(record.id)
-                        if (record.id === currentId) onDeleteCurrent()
-                        await refresh()
-                        message.success('已删除')
-                      }}
+                      onConfirm={() => void handleDelete(record.id)}
                     >
                       <Button type="link" size="small" danger>
                         删除

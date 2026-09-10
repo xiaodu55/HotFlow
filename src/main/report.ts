@@ -142,6 +142,19 @@ function diagnosisHtml(diagnosis: DiagnosisResult | null): string {  if (!diagno
   if (diagnosis.advicePublishTime.length) parts.push(listSection('发布时间建议', diagnosis.advicePublishTime, 'advice'))
   if (diagnosis.adviceTopics.length) parts.push(listSection('选题方向建议', diagnosis.adviceTopics, 'advice'))
   if (diagnosis.adviceActions.length) parts.push(listSection('行动清单', diagnosis.adviceActions, 'action'))
+  if (diagnosis.conversation && diagnosis.conversation.length > 0) {
+    const qa = diagnosis.conversation
+      .map(
+        (turn) => `<div style="margin-bottom: 14px;">
+        <p style="font-weight: 700; color: #4f6ef7; margin: 0 0 4px;">Q：${esc(turn.question)}</p>
+        <p style="white-space: pre-wrap; line-height: 1.8; margin: 0;">${esc(turn.answer)}</p>
+      </div>`
+      )
+      .join('')
+    parts.push(
+      `<div class="diag-block" style="margin-top: 16px;"><h4 style="color: #4f6ef7;">追问与深挖（AI 诊断后的针对性分析）</h4>${qa}</div>`
+    )
+  }
   if (diagnosis.model) {
     parts.push(`<p class="diag-meta">由 ${esc(diagnosis.model)} 于 ${esc(fmtTime(diagnosis.generatedAt))} 生成</p>`)
   }
