@@ -23,6 +23,7 @@ const SYSTEM_PROMPT = `你是一名资深短视频运营专家，负责分析账
 
 如果用户数据中包含「上期诊断」，请额外在 JSON 中输出一个字段：
 "retrospective": ["对照上期建议与本期数据的复盘结论，2-4 条：说明上期哪些建议在本期数据中得到验证、哪些无效、哪些未见执行，引用数据佐证"]
+若数据中包含「上期建议执行对照」，请据此判断：按时段发布占比低说明上期建议未见执行；时段内外表现对比说明建议是否有效。
 没有「上期诊断」时不要输出 retrospective 字段。`
 
 function daysSince(publishTime: string | null): number | null {
@@ -46,6 +47,54 @@ function compactRecord(r: VideoRecord) {
     评论: r.comments,
     分享: r.shares,
     收藏: r.collects
+  }
+}
+
+function parseHour(publishTime: string | null): number | null {
+  if (!publishTime) return null
+  const d = new Date(publishTime)
+  return Number.isNaN(d.getTime()) ? null : d.getHours()
+}
+
+/** 从发布时间建议文本提取小时区间（如「19-22点」「20点到22点」「12点」），解析不出时返回空数组 */
+export function extractAdvisedHours(text: string): Array<[number, number]> {
+  const windows: Array<[number, number]> = []
+  const push = (a: number, b: number): void => {
+    if (a <= 23 && b <= 23) windows.push([Math.min(a, b), Math.max(a, b)])
+  }
+  // 「19-22点」式
+  for (const m of text.matchAll(/(\d{1,2})\s*[-~—至到]\s*(\d{1,2})\s*[点时]/g)) push(Number(m[1]), Number(m[2]))
+  // 「20点到22点」式（点在数字后）
+  for (const m of text.matchAll(/(\d{1,2})\s*[点时]\s*[-~—至到]\s*(\d{1,2})/g)) push(Number(m[1]), Number(m[2]))
+  if (windows.length) return windows
+  for (const m of text.matchAll(/(\d{1,2})\s*[点时]/g)) push(Number(m[1]), Number(m[1]))
+  return windows
+}
+
+/** 上期建议执行对照：建议的发布时段 vs 本期实际发布分布与表现，供模型判断建议是否被执行、是否有效 */
+export function adviceExecution(
+  previous: Pick<DiagnosisResult, 'advicePublishTime'>,
+  snapshot: Snapshot
+): Record<string, unknown> | null {
+  const windows = extractAdvisedHours(previous.advicePublishTime.join('；'))
+  if (!windows.length) return null
+  const inWindow = (h: number): boolean => windows.some(([a, b]) => h >= a && h <= b)
+  const advised = windows.map(([a, b]) => (a === b ? `${a}点` : `${a}-${b}点`))
+  const timed = snapshot.records
+    .map((r) => ({ r, h: parseHour(r.publishTime) }))
+    .filter((x): x is { r: VideoRecord; h: number } => x.h != null)
+  if (!timed.length) {
+    return { 建议发布时段: advised, 说明: '本期视频均无发布时间信息，无法对照执行情况' }
+  }
+  const hit = timed.filter((x) => inWindow(x.h))
+  const miss = timed.filter((x) => !inWindow(x.h))
+  const avgPlays = (list: typeof timed): number | null =>
+    list.length ? Math.round(list.reduce((s, x) => s + x.r.plays, 0) / list.length) : null
+  return {
+    建议发布时段: advised,
+    按建议时段发布的占比: `${Math.round((hit.length / timed.length) * 100)}%（${hit.length}/${timed.length}）`,
+    建议时段内篇均播放: avgPlays(hit),
+    建议时段外篇均播放: avgPlays(miss)
   }
 }
 
@@ -100,6 +149,8 @@ function buildUserPayload(
       选题建议: previous.adviceTopics,
       行动清单: previous.adviceActions
     }
+    const execution = adviceExecution(previous, snapshot)
+    if (execution) payload.上期建议执行对照 = execution
   }
 
   return JSON.stringify(payload)
