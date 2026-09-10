@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { Alert, App as AntApp, Button, ConfigProvider, Empty, Layout, Menu, Result, Spin, Switch, Tooltip } from 'antd'
 import {
   DatabaseOutlined,
@@ -21,12 +21,14 @@ import {
   type ThemeMode
 } from './theme'
 import ErrorBoundary from './components/ErrorBoundary'
-import ImportPage from './pages/Import'
-import DashboardPage from './pages/Dashboard'
-import VideosPage from './pages/Videos'
-import DiagnosisPage from './pages/Diagnosis'
-import ReportPage from './pages/Report'
-import SettingsPage from './pages/Settings'
+
+// 页面级代码分割：各页按需加载，降低首屏 JS 解析成本
+const ImportPage = lazy(() => import('./pages/Import'))
+const DashboardPage = lazy(() => import('./pages/Dashboard'))
+const VideosPage = lazy(() => import('./pages/Videos'))
+const DiagnosisPage = lazy(() => import('./pages/Diagnosis'))
+const ReportPage = lazy(() => import('./pages/Report'))
+const SettingsPage = lazy(() => import('./pages/Settings'))
 
 export type PageKey = 'import' | 'dashboard' | 'videos' | 'diagnosis' | 'report' | 'settings'
 
@@ -181,6 +183,13 @@ export default function App() {
               </Layout.Header>
               <Layout.Content style={{ padding: '8px 20px 20px', overflow: 'auto', position: 'relative' }}>
                 <ErrorBoundary>
+                <Suspense
+                  fallback={
+                    <div style={{ textAlign: 'center', marginTop: 140 }}>
+                      <Spin />
+                    </div>
+                  }
+                >
                 {needData ? (
                   <Empty style={{ marginTop: 120 }} description="还没有数据，先导入一份平台导出的表格吧">
                     <Button type="primary" onClick={() => setPage('import')}>
@@ -229,6 +238,7 @@ export default function App() {
                   ) : (
                     <SettingsPage settings={settings} onSaved={setSettings} onSnapshotsChanged={refreshSnapshots} />
                   )}
+                </Suspense>
                 </ErrorBoundary>
               </Layout.Content>
             </Layout>
