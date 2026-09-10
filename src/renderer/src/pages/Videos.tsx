@@ -212,7 +212,7 @@ export default function VideosPage({ snapshot, analysis }: Props) {
         columns={columns}
         size={density}
         scroll={{ x: 1240 }}
-        pagination={{ pageSize: 20, showSizeChanger: false, showTotal: (t) => `共 ${t} 条` }}
+        pagination={{ pageSize: 50, showSizeChanger: true, pageSizeOptions: [20, 50, 100], showTotal: (t) => `共 ${t} 条` }}
         rowClassName={(r) => (topIds.has(r.id) ? 'row-top' : bottomIds.has(r.id) ? 'row-bottom' : '')}
       />
       </Card>
