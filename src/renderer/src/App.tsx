@@ -218,6 +218,7 @@ export default function App() {
                 ) : page === 'dashboard' ? (
                   <DashboardPage
                     analysis={analysis}
+                    snapshot={snapshot}
                     snapshots={snapshots}
                     compareId={compareId}
                     onCompareChange={setCompareId}

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Alert, Card, Col, Row, Segmented, Select } from 'antd'
-import type { AnalysisResult, SnapshotMeta, StrategyReview, VideoDiff } from '@shared/types'
+import { Alert, Card, Col, Row, Segmented, Select, Table, Tag } from 'antd'
+import type { AnalysisResult, Snapshot, SnapshotMeta, StrategyReview, VideoDiff, VideoTagMap } from '@shared/types'
+import { computeTagStats } from '@shared/metrics'
 import { METRIC_INFO } from '../metricsInfo'
 import Chart from '../components/Chart'
 import KpiCard from '../components/KpiCard'
@@ -12,6 +13,7 @@ import StrategyReviewCard from './StrategyReviewCard'
 
 interface Props {
   analysis: AnalysisResult | null
+  snapshot: Snapshot | null
   snapshots: SnapshotMeta[]
   compareId: string | undefined
   onCompareChange: (id: string | undefined) => void
@@ -47,10 +49,18 @@ function buildKpis(analysis: AnalysisResult): KpiItem[] {
   ]
 }
 
-export default function DashboardPage({ analysis, snapshots, compareId, onCompareChange }: Props) {
+export default function DashboardPage({ analysis, snapshot, snapshots, compareId, onCompareChange }: Props) {
   const [rankDim, setRankDim] = useState<'plays' | 'engagement'>('plays')
   const [guideVisible, setGuideVisible] = useState(() => localStorage.getItem('hotflow-guide-seen') !== '1')
   const [review, setReview] = useState<StrategyReview | null>(null)
+  const [tagMap, setTagMap] = useState<VideoTagMap>({})
+
+  useEffect(() => {
+    void window.api
+      .getVideoTags()
+      .then(setTagMap)
+      .catch(() => undefined)
+  }, [])
 
   const snapshotId = analysis?.snapshot.id ?? null
   useEffect(() => {
@@ -225,6 +235,38 @@ export default function DashboardPage({ analysis, snapshots, compareId, onCompar
       )}
 
       <StrategyReviewCard review={review} />
+
+      {Object.keys(tagMap).length > 0 && (
+        <Card size="small" title="标签表现（业务视角：按你在明细页打的标签聚合）" style={{ marginBottom: 16 }}>
+          <Table
+            size="small"
+            pagination={false}
+            rowKey="tag"
+            dataSource={computeTagStats(snapshot?.records ?? [], tagMap)}
+            columns={[
+              {
+                title: '标签',
+                dataIndex: 'tag',
+                render: (t: string) => (
+                  <Tag color="blue" bordered={false}>
+                    {t}
+                  </Tag>
+                )
+              },
+              { title: '条数', dataIndex: 'count', width: 80 },
+              { title: '篇均播放', dataIndex: 'avgPlays', width: 120, align: 'right' as const, render: fmtNum },
+              {
+                title: '平均互动率',
+                dataIndex: 'avgEngagementRate',
+                width: 120,
+                align: 'right' as const,
+                render: fmtPct
+              },
+              { title: '总播放', dataIndex: 'totalPlays', width: 140, align: 'right' as const, render: fmtNum }
+            ]}
+          />
+        </Card>
+      )}
 
       {analysis.trend.length > 0 && (
         <Card

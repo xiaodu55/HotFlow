@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import { Button, Card, Input, Segmented, Space, Table, Tag, Tooltip, Typography } from 'antd'
-import { ExportOutlined } from '@ant-design/icons'
-import type { AnalysisResult, Snapshot, VideoRecord } from '@shared/types'
-import { engagementRateOf } from '@shared/metrics'
+import { Button, Card, Input, Popover, Segmented, Space, Table, Tag, Tooltip, Typography, App } from 'antd'
+import { ExportOutlined, TagsOutlined } from '@ant-design/icons'
+import type { AnalysisResult, Snapshot, VideoRecord, VideoTagMap } from '@shared/types'
+import { engagementRateOf, matchKeyOf } from '@shared/metrics'
 import { metricTooltip } from '../metricsInfo'
 import { daysSince } from '../utils'
 import PageHeader from '../components/PageHeader'
@@ -26,8 +26,76 @@ interface Props {
 }
 
 export default function VideosPage({ snapshot, analysis }: Props) {
+  const { message } = App.useApp()
   const [search, setSearch] = useState('')
   const [density, setDensity] = useState<'small' | 'middle' | 'large'>('middle')
+  const [tagMap, setTagMap] = useState<VideoTagMap>({})
+
+  useEffect(() => {
+    void window.api
+      .getVideoTags()
+      .then(setTagMap)
+      .catch(() => message.error('标签加载失败'))
+  }, [message])
+
+  const allTags = useMemo(() => [...new Set(Object.values(tagMap).flat())].sort(), [tagMap])
+
+  async function updateTags(key: string, tags: string[]) {
+    try {
+      setTagMap(await window.api.setVideoTags(key, tags))
+    } catch (err) {
+      message.error(`保存标签失败：${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+
+  /** 单个视频的打标气泡：已有标签可删，输入回车新增 */
+  function TagEditor({ record }: { record: VideoRecord }) {
+    const key = matchKeyOf(record)
+    const tags = tagMap[key] ?? []
+    const [draft, setDraft] = useState('')
+    return (
+      <Popover
+        trigger="click"
+        placement="bottom"
+        content={
+          <div style={{ width: 220 }}>
+            <div style={{ marginBottom: 8 }}>
+              {tags.length === 0 && (
+                <span style={{ color: 'rgba(148,163,184,0.9)', fontSize: 12 }}>暂无标签，输入后回车添加</span>
+              )}
+              {tags.map((t) => (
+                <Tag
+                  key={t}
+                  color="blue"
+                  bordered={false}
+                  closable
+                  onClose={() => void updateTags(key, tags.filter((x) => x !== t))}
+                >
+                  {t}
+                </Tag>
+              ))}
+            </div>
+            <Input.Search
+              size="small"
+              placeholder="新标签，回车添加"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onSearch={(v) => {
+                const t = v.trim()
+                if (!t) return
+                if (!tags.includes(t)) void updateTags(key, [...tags, t])
+                setDraft('')
+              }}
+            />
+          </div>
+        }
+      >
+        <Button type="text" size="small" icon={<TagsOutlined />}>
+          {tags.length > 0 ? `${tags.length}` : '打标'}
+        </Button>
+      </Popover>
+    )
+  }
 
   const topIds = useMemo(() => new Set((analysis?.topByPlays ?? []).map((r) => r.id)), [analysis])
   const bottomIds = useMemo(() => new Set((analysis?.bottomByPlays ?? []).map((r) => r.id)), [analysis])
@@ -102,6 +170,26 @@ export default function VideosPage({ snapshot, analysis }: Props) {
         return <Tag color={color}>{g}</Tag>
       }
     },
+    {
+      title: '标签',
+      key: 'tags',
+      width: 170,
+      filters: allTags.map((t) => ({ text: t, value: t })),
+      onFilter: (value: unknown, r: VideoRecord) => (tagMap[matchKeyOf(r)] ?? []).includes(value as string),
+      render: (_: unknown, r: VideoRecord) => {
+        const tags = tagMap[matchKeyOf(r)] ?? []
+        return (
+          <Space size={4} wrap>
+            {tags.map((t) => (
+              <Tag key={t} color="blue" bordered={false}>
+                {t}
+              </Tag>
+            ))}
+            <TagEditor record={r} />
+          </Space>
+        )
+      }
+    },
     { title: '发布时间', dataIndex: 'publishTime', width: 140, render: fmtTime },
     {
       title: '发布至今',
@@ -170,7 +258,7 @@ export default function VideosPage({ snapshot, analysis }: Props) {
       sorter: (a: VideoRecord, b: VideoRecord) => a.collects - b.collects,
       render: fmtNum
     }
-  ], [analysis])
+  ], [analysis, tagMap, allTags])
 
   return (
     <div>
@@ -212,7 +300,7 @@ export default function VideosPage({ snapshot, analysis }: Props) {
         dataSource={data}
         columns={columns}
         size={density}
-        scroll={{ x: 1240 }}
+        scroll={{ x: 1400 }}
         pagination={{ pageSize: 50, showSizeChanger: true, pageSizeOptions: [20, 50, 100], showTotal: (t) => `共 ${t} 条` }}
         rowClassName={(r) => (topIds.has(r.id) ? 'row-top' : bottomIds.has(r.id) ? 'row-bottom' : '')}
       />
