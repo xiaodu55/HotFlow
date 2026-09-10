@@ -30,7 +30,8 @@ const api: Api = {
   listTopics: () => ipcRenderer.invoke('app:listTopics'),
   addTopic: (text, source) => ipcRenderer.invoke('app:addTopic', text, source),
   updateTopic: (id, status) => ipcRenderer.invoke('app:updateTopic', id, status),
-  deleteTopic: (id) => ipcRenderer.invoke('app:deleteTopic', id)
+  deleteTopic: (id) => ipcRenderer.invoke('app:deleteTopic', id),
+  generateWeeklyReport: (snapshotId) => ipcRenderer.invoke('app:generateWeeklyReport', snapshotId)
 }
 
 contextBridge.exposeInMainWorld('api', api)

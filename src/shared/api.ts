@@ -57,4 +57,6 @@ export interface Api {
   updateTopic(id: string, status: TopicStatus): Promise<Topic[]>
   /** 删除选题 */
   deleteTopic(id: string): Promise<Topic[]>
+  /** 周报文案：配置了大模型走 AI 生成，否则/失败时回退纯数据模板（note 说明原因） */
+  generateWeeklyReport(snapshotId: string): Promise<{ markdown: string; aiGenerated: boolean; note?: string }>
 }

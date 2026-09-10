@@ -1,5 +1,6 @@
 import OpenAI from 'openai'
 import { analyzeTitles, engagementRateOf } from '@shared/metrics'
+import { buildWeeklyDataDigest } from '@shared/weekly'
 import { logWarn } from './logger'
 import type { AnalysisResult, DiagnosisResult, LlmConfig, Snapshot, VideoRecord } from '@shared/types'
 
@@ -213,6 +214,30 @@ export function parseDiagnosis(text: string, model: string): DiagnosisResult {
 
 export function isLlmConfigured(cfg: LlmConfig): boolean {
   return Boolean(cfg.apiKey.trim() && cfg.baseURL.trim() && cfg.model.trim())
+}
+
+const WEEKLY_SYSTEM = `你是短视频运营团队的运营专家。根据用户提供的本周数据摘要，撰写一份可直接发给团队的中文运营周报。
+要求：
+- 用 Markdown 输出：先一段总体结论（2-3 句，引用关键数字），然后「核心数据」「亮点」「问题」「下周行动」小节
+- 亮点与问题要引用具体视频和数字；下周行动 3-5 条，承接数据中显现的机会点
+- 不要编造数据里没有的信息；语言精炼，可直接转发
+- 只输出周报正文，不要任何解释或代码块`
+
+/** 生成 AI 周报（纯文本 Markdown）。未配置或调用失败由调用方回退数据模板 */
+export async function generateWeeklyReport(cfg: LlmConfig, analysis: AnalysisResult): Promise<string> {
+  if (!isLlmConfigured(cfg)) throw new Error('尚未配置大模型')
+  const client = new OpenAI({ apiKey: cfg.apiKey.trim(), baseURL: cfg.baseURL.trim() })
+  const res = await client.chat.completions.create({
+    model: cfg.model.trim(),
+    messages: [
+      { role: 'system', content: WEEKLY_SYSTEM },
+      { role: 'user', content: JSON.stringify(buildWeeklyDataDigest(analysis)) }
+    ],
+    temperature: 0.5
+  })
+  const text = res.choices?.[0]?.message?.content?.trim() ?? ''
+  if (!text) throw new Error('模型未输出内容')
+  return text
 }
 
 export async function testLlm(cfg: LlmConfig): Promise<{ ok: boolean; message: string }> {

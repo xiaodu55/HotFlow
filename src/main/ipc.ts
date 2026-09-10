@@ -16,9 +16,11 @@ import {
   loadSnapshot,
   saveDiagnosis
 } from './history'
-import { askFollowUp, runDiagnosis, testLlm } from './llm'
+import { askFollowUp, generateWeeklyReport, isLlmConfigured, runDiagnosis, testLlm } from './llm'
 import { addTopic, deleteTopic, getVideoTags, listTopics, setVideoTags, updateTopic } from './annotations'
+import { logWarn } from './logger'
 import { buildReportHtml } from './report'
+import { renderWeeklyTemplate } from '@shared/weekly'
 import { loadSettings, saveSettings } from './settings'
 
 function pad(n: number): string {
@@ -163,6 +165,26 @@ export function registerIpc(): void {
   ipcMain.handle('app:addTopic', (_e, text: string, source?: 'ai' | 'manual') => addTopic(text, source ?? 'manual'))
   ipcMain.handle('app:updateTopic', (_e, id: string, status: TopicStatus) => updateTopic(id, status))
   ipcMain.handle('app:deleteTopic', (_e, id: string) => deleteTopic(id))
+
+  // 周报文案：配置了大模型走 AI 生成，未配置/失败回退纯数据模板
+  ipcMain.handle('app:generateWeeklyReport', async (_e, snapshotId: string) => {
+    const { analysis } = await getAnalysisBundle(snapshotId)
+    const settings = await loadSettings()
+    if (isLlmConfigured(settings.llm)) {
+      try {
+        return { markdown: await generateWeeklyReport(settings.llm, analysis), aiGenerated: true }
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : String(err)
+        logWarn('weekly:generate', err)
+        return {
+          markdown: renderWeeklyTemplate(analysis),
+          aiGenerated: false,
+          note: `AI 生成失败（${reason}），已回退为数据模板周报`
+        }
+      }
+    }
+    return { markdown: renderWeeklyTemplate(analysis), aiGenerated: false }
+  })
 
   ipcMain.handle('app:buildReport', async (_e, snapshotId: string, compareId?: string) => {
     const { analysis } = await getAnalysisBundle(snapshotId, compareId)
