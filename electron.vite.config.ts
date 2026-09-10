@@ -22,6 +22,10 @@ export default defineConfig({
         '@shared': resolve('src/shared'),
         '@renderer': resolve('src/renderer/src')
       }
+    },
+    // electron-vite 默认不压缩渲染产物（5.1MB 可读 JS），显式开启
+    build: {
+      minify: 'esbuild'
     }
   }
 })
