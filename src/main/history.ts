@@ -7,24 +7,37 @@ function snapshotFile(id: string): string {
   return join(historyDir(), `${id}.json`)
 }
 
+function metaFile(id: string): string {
+  return join(historyDir(), `${id}.meta.json`)
+}
+
 function diagnosisFile(id: string): string {
   return join(historyDir(), `${id}.diagnosis.json`)
 }
 
 export async function saveSnapshot(snapshot: Snapshot): Promise<void> {
   await ensureHistoryDir()
-  await writeFile(snapshotFile(snapshot.id), JSON.stringify(snapshot), 'utf-8')
+  const { records: _records, ...meta } = snapshot
+  void _records
+  // meta 文件是派生数据：列表/环比基线查找只需 meta，免去全量快照解析
+  await Promise.all([
+    writeFile(snapshotFile(snapshot.id), JSON.stringify(snapshot), 'utf-8'),
+    writeFile(metaFile(snapshot.id), JSON.stringify(meta), 'utf-8')
+  ])
 }
 
 export async function listSnapshots(): Promise<SnapshotMeta[]> {
   await ensureHistoryDir()
-  const files = await readdir(historyDir())
+  const files = (await readdir(historyDir())).filter((f) => f.endsWith('.json') && !f.includes('.diagnosis'))
+  const hasMeta = new Set(files.filter((f) => f.endsWith('.meta.json')))
   const metas: SnapshotMeta[] = []
   for (const f of files) {
-    if (!f.endsWith('.json') || f.endsWith('.diagnosis.json')) continue
+    // 已有独立 meta 文件的快照跳过全量解析，避免重复入列
+    if (!f.endsWith('.meta.json') && hasMeta.has(`${f.slice(0, -5)}.meta.json`)) continue
     try {
       const parsed = JSON.parse(await readFile(join(historyDir(), f), 'utf-8')) as Partial<Snapshot>
       const { records, ...meta } = parsed
+      void records
       // 旧版快照无 account/note 字段，读取时兜底
       metas.push({ account: '', note: '', ...meta } as SnapshotMeta)
     } catch {
@@ -44,7 +57,7 @@ export async function loadSnapshot(id: string): Promise<Snapshot | null> {
 }
 
 export async function deleteSnapshot(id: string): Promise<void> {
-  for (const file of [snapshotFile(id), diagnosisFile(id)]) {
+  for (const file of [snapshotFile(id), metaFile(id), diagnosisFile(id)]) {
     await unlink(file).catch(() => undefined)
   }
 }
