@@ -77,19 +77,6 @@ async function getAnalysisBundle(snapshotId: string, compareId?: string): Promis
 }
 
 export function registerIpc(): void {
-  ipcMain.handle('app:pickAndImport', async (e, platformId: string) => {
-    const win = BrowserWindow.fromWebContents(e.sender)
-    const res = await dialog.showOpenDialog(win ?? ({} as never), {
-      title: '选择平台导出的数据表格',
-      filters: [{ name: '表格文件', extensions: ['xlsx', 'xls', 'csv'] }],
-      properties: ['openFile']
-    })
-    if (res.canceled || res.filePaths.length === 0) return null
-    const snapshot = await importFromFile(res.filePaths[0], platformId)
-    clearAnalysisCache()
-    return { snapshot }
-  })
-
   ipcMain.handle('app:inspectTable', async (_e, filePath: string, platformId: string) =>
     inspectTable(filePath, platformId)
   )

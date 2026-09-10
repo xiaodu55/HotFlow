@@ -15,8 +15,6 @@ import type {
 
 /** preload 暴露到 window.api 的类型安全接口，主进程按同名 channel 实现 */
 export interface Api {
-  /** 弹出文件选择框并导入，用户取消时返回 null */
-  pickAndImport(platformId: string): Promise<ImportOutcome | null>
   /** 只读解析表格，返回列映射预检结果（不落库） */
   inspectTable(filePath: string, platformId: string): Promise<TableInspect>
   /** 按路径导入（配合拖拽与预检确认），meta 携带账号名与周期备注 */
