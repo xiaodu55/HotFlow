@@ -77,7 +77,6 @@ function listSection(title: string, items: string[], cls: string): string {
   </div>`
 }
 
-/** 两期整体指标对比表（环比明细） */
 /** 内容等级分布说明（爆款/优质/正常/低效条数与水位标准） */
 function gradeDistributionHtml(analysis: AnalysisResult): string {
   const levels = analysis.levels
@@ -88,25 +87,26 @@ function gradeDistributionHtml(analysis: AnalysisResult): string {
   分级规则：爆款=播放≥中位数×2 且互动率高于平均；低效=播放<中位数÷2。</p>`
 }
 
-function deltaTableHtml(analysis: AnalysisResult): string {
+/** 两期整体指标对比表（环比明细）。deltas 以英文字段名为键，行数据必须携带 key 查找，不能用中文 label */
+export function deltaTableHtml(analysis: AnalysisResult): string {
   const { totals, prevTotals, deltas } = analysis
   if (!prevTotals || !deltas) return ''
-  const rows: Array<[string, number | null, number | null, (n: number | null) => string]> = [
-    ['视频总数', totals.videoCount, prevTotals.videoCount, fmtNum],
-    ['总播放', totals.plays, prevTotals.plays, fmtNum],
-    ['篇均播放', totals.avgPlays, prevTotals.avgPlays, fmtNum],
-    ['互动率', totals.engagementRate, prevTotals.engagementRate, fmtPct],
-    ['总点赞', totals.likes, prevTotals.likes, fmtNum],
-    ['总评论', totals.comments, prevTotals.comments, fmtNum],
-    ['总分享', totals.shares, prevTotals.shares, fmtNum],
-    ['总收藏', totals.collects, prevTotals.collects, fmtNum],
-    ['涨粉', totals.followsGained, prevTotals.followsGained, fmtNum],
-    ['平均完播率', totals.completionRate, prevTotals.completionRate, fmtPct]
+  const rows: Array<[string, string, number | null, number | null, (n: number | null) => string]> = [
+    ['videoCount', '视频总数', totals.videoCount, prevTotals.videoCount, fmtNum],
+    ['plays', '总播放', totals.plays, prevTotals.plays, fmtNum],
+    ['avgPlays', '篇均播放', totals.avgPlays, prevTotals.avgPlays, fmtNum],
+    ['engagementRate', '互动率', totals.engagementRate, prevTotals.engagementRate, fmtPct],
+    ['likes', '总点赞', totals.likes, prevTotals.likes, fmtNum],
+    ['comments', '总评论', totals.comments, prevTotals.comments, fmtNum],
+    ['shares', '总分享', totals.shares, prevTotals.shares, fmtNum],
+    ['collects', '总收藏', totals.collects, prevTotals.collects, fmtNum],
+    ['followsGained', '涨粉', totals.followsGained, prevTotals.followsGained, fmtNum],
+    ['completionRate', '平均完播率', totals.completionRate, prevTotals.completionRate, fmtPct]
   ]
   const body = rows
-    .filter(([, cur, prev]) => cur != null || prev != null)
-    .map(([label, cur, prev, fmt]) => {
-      const d = deltas[label] ?? null
+    .filter(([, , cur, prev]) => cur != null || prev != null)
+    .map(([key, label, cur, prev, fmt]) => {
+      const d = deltas[key] ?? null
       const arrow =
         d?.direction === 'up' ? '<span class="delta up">↑</span>' : d?.direction === 'down' ? '<span class="delta down">↓</span>' : '<span class="delta flat">→</span>'
       const pct = d?.percent != null ? `${Math.abs(d.percent).toFixed(1)}%` : '—'
